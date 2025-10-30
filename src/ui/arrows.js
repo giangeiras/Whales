@@ -1,4 +1,4 @@
-import { ctx } from '../utils/canvas.js';
+import { ctx, seaLevel } from '../utils/canvas.js';
 
 let arrowPulse = 0;
 

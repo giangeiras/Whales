@@ -1,5 +1,7 @@
 import { ctx, seaLevel } from '../utils/canvas.js';
 import { keys } from '../utils/input.js';
+import { scenario } from '../scenarios/scenarioManager.js';
+import { krill } from './krill.js';
 
 export class Whale {
     constructor(x, y, controls, colors) {
@@ -27,6 +29,18 @@ export class Whale {
         this.updatePhysics();
         this.checkBoundaries();
         this.updateJump();
+        // krill eating (only in Antarctica scenario)
+        if (scenario === 0 && Array.isArray(krill)) {
+            for (const k of krill) {
+                if (!k.eaten) {
+                    const dx = this.x - k.x, dy = this.y - k.y;
+                    if (Math.hypot(dx, dy) < this.size * 0.6) {
+                        k.eaten = true;
+                        if (this.krillEaten < 10) this.krillEaten++;
+                    }
+                }
+            }
+        }
         this.tail += 0.08;
     }
 
@@ -88,7 +102,7 @@ export class Whale {
     startJump() {
         this.jumping = true;
         this.jumpPhase = 0;
-        if (window.scenario === 1) {
+        if (scenario === 1) {
             this.jumpsDone = Math.min(this.jumpsDone + 1, 9999);
         }
     }

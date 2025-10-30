@@ -1,4 +1,4 @@
-import { canvas, ctx } from '../utils/canvas.js';
+import { canvas, ctx, seaLevel } from '../utils/canvas.js';
 
 export let seagulls = [];
 

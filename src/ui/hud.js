@@ -1,7 +1,6 @@
-import { whale1, whale2 } from '../game.js';
 import { scenario } from '../scenarios/scenarioManager.js';
 
-export function updateHUD() {
+export function updateHUD(whale1, whale2) {
     const counter = document.getElementById('counter');
     
     if (scenario === 0) {
