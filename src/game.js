@@ -278,7 +278,7 @@ function loop(){
     if (baby) updateBaby();
 
     drawEntities();
-    updateHUD(whale1, whale2);
+    updateHUD(whale1, whale2, baby);
 
     if (missionReady) {
         // If we're in the final (warmer) scenario and a baby exists, do not show
