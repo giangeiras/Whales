@@ -25,29 +25,6 @@ export function drawLeftArrow() {
 }
 
 export function drawEdgeHint() {
-    const x = 32;
-    const baseYs = [seaLevel + 70, seaLevel + 190, seaLevel + 310];
-    const now = performance.now() / 1000;
-    
-    ctx.save();
-    for (let i = 0; i < baseYs.length; i++) {
-        const y = Math.min(window.innerHeight - 40, baseYs[i]);
-        const phase = now * 2 + i * 0.8;
-        const r = 10 + (Math.sin(phase) * 0.5 + 0.5) * 16;
-        
-        ctx.lineWidth = 2;
-        ctx.strokeStyle = "rgba(255,255,255,0.55)";
-        ctx.globalAlpha = 0.7;
-        ctx.beginPath();
-        ctx.arc(x, y, r, -Math.PI * 0.6, Math.PI * 0.6);
-        ctx.stroke();
-        
-        const bubY = y - (phase % 1) * 18;
-        ctx.globalAlpha = 0.5;
-        ctx.fillStyle = "rgba(255,255,255,0.6)";
-        ctx.beginPath();
-        ctx.arc(x + 6, bubY, 2.2, 0, Math.PI * 2);
-        ctx.fill();
-    }
-    ctx.restore();
+    // No-op: edge hint visuals removed to keep a single blinking arrow (use drawLeftArrow)
+    return;
 }

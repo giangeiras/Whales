@@ -9,6 +9,8 @@ export function resize() {
     
     // Update hint position
     const hintEl = document.getElementById("hint");
-    const hintY = Math.max(12, Math.floor(seaLevel * 0.38));
-    hintEl.style.top = `${hintY}px`;
+    if (hintEl) {
+        const hintY = Math.max(12, Math.floor(seaLevel * 0.38));
+        hintEl.style.top = `${hintY}px`;
+    }
 }

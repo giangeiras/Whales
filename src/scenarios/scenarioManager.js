@@ -61,30 +61,19 @@ function updateSkyBackground(s) {
 }
 
 function setScenarioMessaging(s) {
+  // Hide the educational panel and mission hint — these UI elements are removed
+  // from the player's view but leaving the DOM elements or their IDs intact
+  // avoids touching other logic that may query them elsewhere.
   const eduEl = document.getElementById("edu");
   const hintEl = document.getElementById("hint");
-
-  if (s === 0) {
-    eduEl.innerHTML =
-      "Humpback whales feed on tiny krill in the icy waters of Antarctica to build fat reserves for their long swim north.";
-    hintEl.textContent =
-      "Mission hint: Guide the whales with your fingers and help them to eat enough krill to start their journey to warmer seas.";
-    hintEl.style.color = "#000";
-    hintEl.style.textShadow = "none";
-  } else if (s === 1) {
-    eduEl.innerHTML =
-      "As humpbacks travel north past Sydney, they often leap out of the water, a behaviour called <em>breaching</em>. Scientists think whales breach to communicate, remove parasites, or show strength to other whales.";
-    hintEl.textContent =
-      "Mission hint: Guide the whales to the surface to make them jump! (tip: make them move a little down and then up again)";
-    hintEl.style.color = "#fff";
-    hintEl.style.textShadow = "0 2px 4px rgba(0,0,0,0.45)";
-  } else {
-    eduEl.innerHTML =
-      "In the warm northern waters, humpback whales mate and give birth to their calves. Warm, calm seas protect newborns as their mothers teach them to swim and breathe.";
-    hintEl.textContent =
-      "Mission hint: Guide the whales close together, it's time to welcome a new calf!";
-    hintEl.style.color = "#fff";
-    hintEl.style.textShadow = "0 2px 4px rgba(0,0,0,0.45)";
+  if (eduEl) {
+    eduEl.style.display = 'none';
+    // clear content to be safe
+    try { eduEl.innerHTML = ''; } catch (e) { /* ignore */ }
+  }
+  if (hintEl) {
+    hintEl.style.display = 'none';
+    try { hintEl.textContent = ''; } catch (e) { /* ignore */ }
   }
 }
 

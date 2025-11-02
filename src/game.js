@@ -63,7 +63,11 @@ function initGame() {
     whale2.name = 'Splash';
 
     initScenario(0);
+    // debug: indicate initialization completed
+    try { console.debug && console.debug('initGame completed'); } catch (e) {}
 }
+
+let __loopStarted = false;
 
 function initScenario(s) {
     baby = null;
@@ -73,8 +77,9 @@ function initScenario(s) {
     splashBubble.active = false;
     splashBubble.startTime = 0;
     if (s === 0) {
-        // schedule Splash's line 3 seconds after entering Antarctica
-        splashBubble.scheduledAt = scenarioStartTime + 3000;
+        // show the Splash line only after the intro modal is dismissed
+        // (we'll activate it from hideAntarcticaModal)
+        splashBubble.scheduledAt = 0;
     } else {
         splashBubble.scheduledAt = 0;
     }
@@ -96,6 +101,8 @@ function initScenario(s) {
         spawnKrill(9, 8);
         spawnFish(0);
         spawnSeagulls(0);
+        // show Antarctica intro modal which blocks krill-eating until dismissed
+        showAntarcticaModal();
     } else if (s === 1) {
         spawnKrill(0);
         spawnFish(0);
@@ -120,6 +127,101 @@ function initScenario(s) {
     whale1.targetActive = whale2.targetActive = false;
 
     setScenarioMessaging(s);
+}
+
+// Antarctica intro modal: appears when entering scenario 0 and blocks krill-eating
+function createAntarcticaModal() {
+    if (document.getElementById('antarctica-modal')) return;
+    // overlay behind the modal
+    let overlay = document.getElementById('antarctica-overlay');
+    if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.id = 'antarctica-overlay';
+        Object.assign(overlay.style, {
+            position: 'fixed', left: '0', top: '0', width: '100vw', height: '100vh',
+            background: 'rgba(0,0,0,0.6)', zIndex: 99990, display: 'none', pointerEvents: 'auto'
+        });
+        document.body.appendChild(overlay);
+    }
+
+    const modal = document.createElement('div');
+    modal.id = 'antarctica-modal';
+    // position it in the center of the sky (sky occupies top 30vh; center ~15vh)
+    Object.assign(modal.style, {
+        position: 'fixed', left: '50%', top: '25%', transform: 'translate(-50%, -50%)',
+        zIndex: 100001, background: 'rgba(255,255,255,0.7)', color: '#000', padding: '35px 50px',
+        borderRadius: '10px', maxWidth: '520px', width: 'min(64vw, 520px)', boxShadow: '0 8px 30px rgba(0,0,0,0.35)',
+        fontFamily: 'system-ui, sans-serif', fontSize: '22px', lineHeight: '1.4', textAlign: 'center'
+    });
+
+    // (no close button — modal must be dismissed with the "x" key)
+
+    const msg = document.createElement('div');
+    msg.id = 'antarctica-modal-text';
+    msg.textContent = 'Guide the pair to eat krills in Antarctica so they can build energy for their long swim north to warmer seas.';
+    // ensure message wraps nicely inside the narrower modal and stays left-aligned
+    Object.assign(msg.style, { whiteSpace: 'normal', overflowWrap: 'break-word', textAlign: 'left' });
+    modal.appendChild(msg);
+
+    const hint = document.createElement('div');
+    hint.id = 'antarctica-modal-hint';
+    hint.textContent = "Press 'X' to continue";
+    // Rounded transparent container with black stroke, centered and padded
+    Object.assign(hint.style, {
+        margin: '20px auto 0',
+        fontSize: '16px',
+        opacity: '0.95',
+        textAlign: 'center',
+        background: 'lightblue',
+        border: '1.5px solid rgba(0,0,0,0.95)',
+        borderRadius: '10px',
+        padding: '8px 14px',
+        display: 'inline-block',
+        boxSizing: 'border-box'
+    });
+    modal.appendChild(hint);
+
+    // keyboard 'x' handler
+    modal.__keyHandler = (e) => {
+        if (!e) return;
+        if (e.key && e.key.toLowerCase() === 'x') {
+            hideAntarcticaModal();
+        }
+    };
+
+    document.body.appendChild(modal);
+}
+
+function showAntarcticaModal() {
+    createAntarcticaModal();
+    const modal = document.getElementById('antarctica-modal');
+    if (!modal) return;
+    // show overlay first so modal is visually on top of it
+    const overlay = document.getElementById('antarctica-overlay');
+    if (overlay) overlay.style.display = 'block';
+    modal.style.display = 'block';
+    // set global flag so whales won't count krill
+    try { window.antarcticaDialogActive = true; } catch (e) {}
+    window.addEventListener('keydown', modal.__keyHandler);
+}
+
+function hideAntarcticaModal() {
+    const modal = document.getElementById('antarctica-modal');
+    if (!modal) return;
+    modal.style.display = 'none';
+    // hide overlay
+    const overlay = document.getElementById('antarctica-overlay');
+    if (overlay) overlay.style.display = 'none';
+    try { window.antarcticaDialogActive = false; } catch (e) {}
+    // Activate the scheduled Splash bubble immediately when the modal is dismissed
+    try {
+        if (!splashBubble.shown) {
+            splashBubble.shown = true;
+            splashBubble.active = true;
+            splashBubble.startTime = Date.now();
+        }
+    } catch (e) { /* ignore if splashBubble isn't defined */ }
+    if (modal.__keyHandler) window.removeEventListener('keydown', modal.__keyHandler);
 }
 
 function drawBackground() {
@@ -474,6 +576,8 @@ function checkScenarioAdvance() {
 
 function loop(){
     ctx.clearRect(0,0,canvas.width,canvas.height);
+
+    if (!__loopStarted) { __loopStarted = true; try { console.debug && console.debug('game loop started'); } catch (e) {} }
 
     drawBackground();
 
