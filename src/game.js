@@ -107,6 +107,9 @@ function initScenario(s) {
         spawnKrill(0);
         spawnFish(0);
         spawnSeagulls(6);
+        // ensure any previous modals are hidden, then show Sydney intro modal
+        try { hideAntarcticaModal(); } catch (e) {}
+        try { showSydneyModal(); } catch (e) { /* ignore if not defined yet */ }
     } else {
         spawnKrill(0);
         // warmer waters: no fish
@@ -221,6 +224,73 @@ function hideAntarcticaModal() {
             splashBubble.startTime = Date.now();
         }
     } catch (e) { /* ignore if splashBubble isn't defined */ }
+    if (modal.__keyHandler) window.removeEventListener('keydown', modal.__keyHandler);
+}
+
+// Sydney intro modal: appears when entering scenario 1 and blocks interactions until dismissed
+function createSydneyModal() {
+    if (document.getElementById('sydney-modal')) return;
+    // overlay behind the modal
+    let overlay = document.getElementById('sydney-overlay');
+    if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.id = 'sydney-overlay';
+        Object.assign(overlay.style, {
+            position: 'fixed', left: '0', top: '0', width: '100vw', height: '100vh',
+            background: 'rgba(0,0,0,0.6)', zIndex: 99990, display: 'none'
+        });
+        document.body.appendChild(overlay);
+    }
+
+    const modal = document.createElement('div');
+    modal.id = 'sydney-modal';
+    Object.assign(modal.style, {
+        position: 'fixed', left: '50%', top: '40%', transform: 'translate(-50%, -50%)',
+        zIndex: 100001, background: 'rgba(255,255,255,0.85)', color: '#000', padding: '30px 44px',
+        borderRadius: '10px', maxWidth: '520px', width: 'min(64vw, 520px)', boxShadow: '0 8px 30px rgba(0,0,0,0.35)',
+        fontFamily: 'system-ui, sans-serif', fontSize: '20px', lineHeight: '1.4', textAlign: 'center'
+    });
+
+    const msg = document.createElement('div');
+    msg.id = 'sydney-modal-text';
+    msg.textContent = "Let's help the whales pop up and jump near Sydney! That jump is called a breach. They might be saying hello, getting rid of itchy bugs, or showing they're strong.";
+    Object.assign(msg.style, { whiteSpace: 'normal', overflowWrap: 'break-word', textAlign: 'left' });
+    modal.appendChild(msg);
+
+    const hint = document.createElement('div');
+    hint.id = 'sydney-modal-hint';
+    hint.textContent = "Press 'X' to continue";
+    Object.assign(hint.style, {
+        margin: '20px auto 0', fontSize: '16px', opacity: '0.95', textAlign: 'center',
+        background: 'transparent', border: '1.5px solid rgba(0,0,0,0.95)', borderRadius: '10px', padding: '8px 14px',
+        display: 'inline-block', boxSizing: 'border-box'
+    });
+    modal.appendChild(hint);
+
+    // keyboard handler
+    modal.__keyHandler = (e) => { if (!e) return; if (e.key && e.key.toLowerCase() === 'x') hideSydneyModal(); };
+
+    document.body.appendChild(modal);
+}
+
+function showSydneyModal() {
+    createSydneyModal();
+    const modal = document.getElementById('sydney-modal');
+    if (!modal) return;
+    const overlay = document.getElementById('sydney-overlay');
+    if (overlay) overlay.style.display = 'block';
+    modal.style.display = 'block';
+    try { window.modalDialogActive = true; window.sydneyDialogActive = true; } catch (e) {}
+    window.addEventListener('keydown', modal.__keyHandler);
+}
+
+function hideSydneyModal() {
+    const modal = document.getElementById('sydney-modal');
+    if (!modal) return;
+    modal.style.display = 'none';
+    const overlay = document.getElementById('sydney-overlay');
+    if (overlay) overlay.style.display = 'none';
+    try { window.modalDialogActive = false; window.sydneyDialogActive = false; } catch (e) {}
     if (modal.__keyHandler) window.removeEventListener('keydown', modal.__keyHandler);
 }
 

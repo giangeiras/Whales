@@ -31,8 +31,8 @@ export class Whale {
         this.checkBoundaries();
         this.updateJump();
     // krill eating (only in Antarctica scenario)
-    // If the Antarctica intro dialog is active, whales should not be able to eat krill.
-    if (scenario === 0 && Array.isArray(krill) && !window.antarcticaDialogActive) {
+    // If any modal dialog is active, whales should not be able to eat krill.
+    if (scenario === 0 && Array.isArray(krill) && !(window.antarcticaDialogActive || window.modalDialogActive)) {
             for (const k of krill) {
                 if (!k.eaten) {
                     const dx = this.x - k.x, dy = this.y - k.y;
