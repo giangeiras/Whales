@@ -27,7 +27,7 @@ let splashBubble = {
 
 // Kiki (Bubbles) speech bubble state — shown when either whale reaches 3 krill eaten
 let kikiBubble = {
-    text: 'Nice haul, Kiki!\nKeep going!',
+    text: 'Krill move in swarms. Try following the sparkly cloud!',
     shown: false,
     active: false,
     startTime: 0,
@@ -418,6 +418,12 @@ function drawKikiBubble() {
     ctx.restore();
 }
 
+// compatibility wrapper: previously the bubble drawer was renamed to dialogue2
+// Some call sites may still expect `dialogue2` — forward to the real function.
+function dialogue2() {
+    try { return drawKikiBubble(); } catch (e) { /* if drawKikiBubble is missing, fail silently */ }
+}
+
 function updateBaby() {
     if (!baby || !baby.mother) return;
     const m = baby.mother;
@@ -503,8 +509,8 @@ function loop(){
     drawEntities();
     // Draw canvas speech bubbles after entities so they overlay whales
     drawSpeechBubbles();
-    // draw Bubbles/Kiki bubble after other bubbles so it overlays appropriately
-    drawKikiBubble();
+        // draw Bubbles/Kiki bubble after other bubbles so it overlays appropriately
+        dialogue2();
     updateHUD(whale1, whale2, baby);
 
     if (missionReady) {
@@ -526,7 +532,6 @@ initInput();
 // Developer hotkeys: allow quick switching between scenarios with keys 1/2/3.
 // These keys set the scenario immediately (visuals + entities) but do NOT alter
 // mission logic — missions still need to be completed or whales moved to the edge
-// to advance naturally.
 window.addEventListener('keydown', (e) => {
     // ignore when typing into form elements etc.
     const tag = (e.target && e.target.tagName) || '';
