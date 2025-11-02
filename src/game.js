@@ -5,7 +5,7 @@ import { initInput } from './utils/input.js';
 import { spawnKrill, updateKrill, drawKrill } from './entities/krill.js';
 import { spawnFish, updateFish, drawFish } from './entities/fish.js';
 import { spawnSeagulls, updateSeagulls, drawSeagulls } from './entities/seagulls.js';
-import { spawnCorals, drawCorals } from './entities/corals.js';
+// corals are now handled via a foreground image `src/assets/corals.png`; procedural corals removed
 
 import { scenario, titles, setScenario, setScenarioMessaging } from './scenarios/scenarioManager.js';
 import { updateHUD } from './ui/hud.js';
@@ -14,6 +14,12 @@ import { drawLeftArrow, drawEdgeHint } from './ui/arrows.js';
 let whale1, whale2;
 let baby = null;
 let missionReady = false;
+// corals image (front layer for warmer waters)
+const coralsImg = new Image();
+let coralsImgLoaded = false;
+coralsImg.onload = () => { coralsImgLoaded = true; };
+coralsImg.onerror = (e) => { coralsImgLoaded = false; console.info('corals.png not found or failed to load; using procedural corals fallback.'); };
+coralsImg.src = 'src/assets/corals.png';
 
 function initGame() {
     window.addEventListener("resize", resize, {passive: true});
@@ -44,18 +50,15 @@ function initScenario(s) {
         spawnKrill(28);
         spawnFish(0);
         spawnSeagulls(0);
-        spawnCorals(0);
     } else if (s === 1) {
         spawnKrill(0);
         spawnFish(0);
         spawnSeagulls(6);
-        spawnCorals(0);
     } else {
         spawnKrill(0);
         // warmer waters: no fish
         spawnFish(0);
         spawnSeagulls(4);
-        spawnCorals(0);
     }
 
     // position whales
@@ -86,14 +89,16 @@ function drawBackground() {
         sky = ctx.createLinearGradient(0,0,0,seaLevel); sky.addColorStop(0,"#9fdfff"); sky.addColorStop(1,"#6fd0ff");
         sea = ctx.createLinearGradient(0,seaLevel,0,h); sea.addColorStop(0, "#25a8a0"); sea.addColorStop(1, "#0d827b");
     }
-    ctx.fillStyle = sky; ctx.fillRect(0,0,w,seaLevel);
-    ctx.fillStyle = sea; ctx.fillRect(0,seaLevel,w,h-seaLevel);
+    // draw the sea only (the sky is provided by the image behind the canvas)
+    ctx.fillStyle = sea;
+    ctx.fillRect(0, seaLevel, w, h - seaLevel);
 
-    // animated waves
+    // animated waves along the surface (sit visually at the seaLevel)
     ctx.beginPath();
-    for (let x=0;x<w;x+=15){
-        const y = seaLevel + Math.sin((x/50)+Date.now()/800)*2;
-        if (x===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+    for (let x = 0; x < w; x += 15) {
+        const y = seaLevel + Math.sin((x / 50) + Date.now() / 800) * 2;
+        if (x === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
     }
     ctx.strokeStyle = "rgba(255,255,255,0.5)";
     ctx.lineWidth = 2; ctx.stroke();
@@ -113,9 +118,28 @@ function drawEntities() {
         updateSeagulls();
         drawSeagulls();
     } else {
-        drawCorals();
-        updateFish();
-        drawFish();
+        // warmer waters: draw a foreground corals image if available, otherwise fall back to procedural corals
+        if (coralsImgLoaded && coralsImg.naturalWidth > 0) {
+            // draw the sea creatures behind the corals
+            updateFish();
+            drawFish();
+            // draw corals image aligned to bottom with a subtle sway/parallax so it feels alive
+            const imgW = coralsImg.naturalWidth || canvas.width;
+            const imgH = coralsImg.naturalHeight || Math.floor(canvas.height * 0.18);
+            // scale image to canvas width while preserving aspect ratio
+            const scale = canvas.width / imgW;
+            const drawH = imgH * scale;
+            // subtle vertical sway based on time (slow sine) — amplitude is small and scales with canvas height
+            const t = Date.now() / 1000; // seconds
+            const amp = Math.max(3, Math.min(10, canvas.height * 0.008));
+            const sway = Math.sin(t * 0.6) * amp; // slow gentle motion
+            const drawY = canvas.height - drawH + sway;
+            try { ctx.drawImage(coralsImg, 0, drawY, canvas.width, drawH); } catch (e) { /* ignore draw errors */ }
+        } else {
+            // fallback: just draw fish (no procedural corals available)
+            updateFish();
+            drawFish();
+        }
     }
 
     // whales
@@ -214,6 +238,27 @@ function loop(){
 
 // Start the game automatically when module is loaded
 initInput();
+
+// Developer hotkeys: allow quick switching between scenarios with keys 1/2/3.
+// These keys set the scenario immediately (visuals + entities) but do NOT alter
+// mission logic — missions still need to be completed or whales moved to the edge
+// to advance naturally.
+window.addEventListener('keydown', (e) => {
+    // ignore when typing into form elements etc.
+    const tag = (e.target && e.target.tagName) || '';
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || e.metaKey || e.ctrlKey) return;
+    if (e.key === '1') {
+        setScenario(0);
+        initScenario(0);
+    } else if (e.key === '2') {
+        setScenario(1);
+        initScenario(1);
+    } else if (e.key === '3') {
+        setScenario(2);
+        initScenario(2);
+    }
+}, {passive: true});
+
 initGame();
 loop();
 

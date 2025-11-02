@@ -1,26 +1,10 @@
-import { canvas, ctx } from '../utils/canvas.js';
+// corals.js removed — kept as a harmless placeholder to avoid accidental import errors.
+// The game now uses `src/assets/corals.png` drawn from `src/game.js` for the warmer scenario.
+// If you want to remove this file from git permanently, run the following locally from the repo root:
+//
+//   git rm src/entities/corals.js
+//   git commit -m "Remove unused procedural corals module"
+//
+// Keeping this lightweight placeholder ensures any lingering imports won't break the game.
 
-export let corals = [];
-
-export function spawnCorals(n = 8) {
-    corals = [];
-    for (let i = 0; i < n; i++) {
-        corals.push({
-            x: 40 + Math.random() * (canvas.width - 80),
-            y: canvas.height - (30 + Math.random() * 80),
-            h: 20 + Math.random() * 60,
-            w: 8 + Math.random() * 18,
-        });
-    }
-}
-
-export function drawCoral(c) {
-    ctx.fillStyle = '#b84c3a';
-    ctx.beginPath();
-    ctx.rect(c.x - c.w / 2, c.y - c.h, c.w, c.h);
-    ctx.fill();
-}
-
-export function drawCorals() {
-    for (const c of corals) drawCoral(c);
-}
+export default {};

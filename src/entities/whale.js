@@ -9,7 +9,8 @@ export class Whale {
         this.y = y;
         this.vx = 0;
         this.vy = 0;
-        this.size = Math.min(window.innerWidth, window.innerHeight) * 0.06;
+    // slightly larger than before so whales appear closer to the original size
+    this.size = Math.min(window.innerWidth, window.innerHeight) * 0.08;
         this.tail = 0;
         this.jumping = false;
         this.jumpPhase = 0;
