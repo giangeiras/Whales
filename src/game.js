@@ -35,6 +35,12 @@ function initGame() {
         {body1:'#0b4c78', body2:'#0e6c9f', tail:'#093e5f'}
     );
 
+    // Name the whales
+    // whale1 acts as the mother in the spawn logic, so name her Bubbles
+    whale1.name = 'Bubbles';
+    // whale2 is the companion
+    whale2.name = 'Splash';
+
     initScenario(0);
 }
 
@@ -146,6 +152,48 @@ function drawEntities() {
     whale1.draw();
     whale2.draw();
     if (baby) { ctx.save(); ctx.globalAlpha = Math.min(1, baby.life * 1.3); baby.draw(); ctx.restore(); }
+
+    // draw names beneath each whale (if present)
+    (function drawNames() {
+        // Slightly smaller, responsive font so labels are unobtrusive on all sizes
+        const fontSize = Math.max(10, Math.round(canvas.width * 0.014));
+        ctx.save();
+        ctx.font = `${fontSize}px system-ui, sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        // subtle stroke for readability
+        ctx.lineWidth = 1.8;
+        ctx.strokeStyle = 'rgba(0,0,0,0.6)';
+        ctx.fillStyle = '#ffffff';
+
+        if (whale1 && whale1.name) {
+            const yOff = (whale1.size || 40) * 0.9;
+            const x = whale1.x;
+            const y = Math.min(canvas.height - 8, whale1.y + yOff);
+            ctx.strokeText(whale1.name, x, y);
+            ctx.fillText(whale1.name, x, y);
+        }
+
+        if (whale2 && whale2.name) {
+            const yOff = (whale2.size || 40) * 0.9;
+            const x = whale2.x;
+            const y = Math.min(canvas.height - 8, whale2.y + yOff);
+            ctx.strokeText(whale2.name, x, y);
+            ctx.fillText(whale2.name, x, y);
+        }
+
+        if (baby && baby.name) {
+            const yOff = (baby.size || 30) * 0.9;
+            const x = baby.x;
+            const y = Math.min(canvas.height - 8, baby.y + yOff);
+            ctx.globalAlpha = Math.min(1, baby.life * 1.3);
+            ctx.strokeText(baby.name, x, y);
+            ctx.fillText(baby.name, x, y);
+            ctx.globalAlpha = 1;
+        }
+
+        ctx.restore();
+    })();
 }
 
 function spawnBaby(mother) {
@@ -154,6 +202,8 @@ function spawnBaby(mother) {
     b.mother = mother;
     b.vx = mother.vx; b.vy = mother.vy;
     b.life = 0.01;
+    // Name the calf
+    b.name = 'Sandy';
     baby = b;
 }
 
@@ -196,7 +246,10 @@ function isMissionComplete() {
 function checkScenarioAdvance() {
     const EDGE = 12;
     if ((whale1.x <= EDGE || whale2.x <= EDGE)) {
-        const nextScenario = (scenario + 1) % 3;
+        // Don't wrap back to the first scenario once we've reached the final level.
+        // The final level (index 2) is terminal — advancing from it does nothing.
+        if (scenario >= 2) return;
+        const nextScenario = scenario + 1;
         setScenario(nextScenario);
         initScenario(nextScenario);
     }
@@ -228,9 +281,13 @@ function loop(){
     updateHUD(whale1, whale2);
 
     if (missionReady) {
-        drawLeftArrow();
-        drawEdgeHint();
-        checkScenarioAdvance();
+        // If we're in the final (warmer) scenario and a baby exists, do not show
+        // arrows or attempt to advance — this level is terminal once the calf is born.
+        if (!(scenario === 2 && baby)) {
+            drawLeftArrow();
+            drawEdgeHint();
+            checkScenarioAdvance();
+        }
     }
 
     requestAnimationFrame(loop);
@@ -248,9 +305,12 @@ window.addEventListener('keydown', (e) => {
     const tag = (e.target && e.target.tagName) || '';
     if (tag === 'INPUT' || tag === 'TEXTAREA' || e.metaKey || e.ctrlKey) return;
     if (e.key === '1') {
+        // Prevent jumping back to Antarctica if we've already reached the final level.
+        if (scenario === 2) return;
         setScenario(0);
         initScenario(0);
     } else if (e.key === '2') {
+        if (scenario === 2) return;
         setScenario(1);
         initScenario(1);
     } else if (e.key === '3') {
