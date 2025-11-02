@@ -1,7 +1,7 @@
 import { ctx, seaLevel } from '../utils/canvas.js';
 import { keys } from '../utils/input.js';
 import { scenario } from '../scenarios/scenarioManager.js';
-import { krill } from './krill.js';
+import { krill, triggerSwarmGlow, consumeSwarmIfNotConsumed } from './krill.js';
 
 export class Whale {
     constructor(x, y, controls, colors) {
@@ -36,8 +36,14 @@ export class Whale {
                 if (!k.eaten) {
                     const dx = this.x - k.x, dy = this.y - k.y;
                     if (Math.hypot(dx, dy) < this.size * 0.6) {
-                        k.eaten = true;
-                        if (this.krillEaten < 10) this.krillEaten++;
+                        if (typeof k.swarmId === 'number') {
+                            const consumed = consumeSwarmIfNotConsumed(k.swarmId);
+                            if (consumed && this.krillEaten < 10) this.krillEaten++;
+                        } else {
+                            k.eaten = true;
+                            if (this.krillEaten < 10) this.krillEaten++;
+                        }
+                        if (typeof k.swarmId === 'number') triggerSwarmGlow(k.swarmId);
                     }
                 }
             }

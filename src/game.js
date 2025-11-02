@@ -14,6 +14,29 @@ import { drawLeftArrow, drawEdgeHint } from './ui/arrows.js';
 let whale1, whale2;
 let baby = null;
 let missionReady = false;
+// Speech bubble state for Splash (whale2)
+let splashBubble = {
+    // use an explicit newline so we display two lines as requested
+    text: 'Fill up on krill, Bubbles!\nBig trip ahead!',
+    scheduledAt: 0,
+    startTime: 0,
+    duration: 4000,
+    shown: false,
+    active: false
+    };
+
+// Kiki (Bubbles) speech bubble state — shown when either whale reaches 3 krill eaten
+let kikiBubble = {
+    text: 'Nice haul, Kiki!\nKeep going!',
+    shown: false,
+    active: false,
+    startTime: 0,
+    duration: 5000,
+    triggeredByWhale1: false,
+    triggeredByWhale2: false
+};
+
+let scenarioStartTime = Date.now();
 // corals image (front layer for warmer waters)
 const coralsImg = new Image();
 let coralsImgLoaded = false;
@@ -36,9 +59,7 @@ function initGame() {
     );
 
     // Name the whales
-    // whale1 acts as the mother in the spawn logic, so name her Bubbles
     whale1.name = 'Bubbles';
-    // whale2 is the companion
     whale2.name = 'Splash';
 
     initScenario(0);
@@ -46,6 +67,24 @@ function initGame() {
 
 function initScenario(s) {
     baby = null;
+    // reset speech bubble scheduling for the new scenario
+    scenarioStartTime = Date.now();
+    splashBubble.shown = false;
+    splashBubble.active = false;
+    splashBubble.startTime = 0;
+    if (s === 0) {
+        // schedule Splash's line 3 seconds after entering Antarctica
+        splashBubble.scheduledAt = scenarioStartTime + 3000;
+    } else {
+        splashBubble.scheduledAt = 0;
+    }
+
+    // reset Kiki bubble triggers when a scenario starts
+    kikiBubble.shown = false;
+    kikiBubble.active = false;
+    kikiBubble.startTime = 0;
+    kikiBubble.triggeredByWhale1 = false;
+    kikiBubble.triggeredByWhale2 = false;
 
     // reset whale counters/state
     whale1.krillEaten = 0; whale1.jumpsDone = 0; whale1.joined = false;
@@ -53,7 +92,8 @@ function initScenario(s) {
 
     // spawn entities per scenario
     if (s === 0) {
-        spawnKrill(28);
+        // spawn more groups of krill for better availability (9 swarms x 8 particles)
+        spawnKrill(9, 8);
         spawnFish(0);
         spawnSeagulls(0);
     } else if (s === 1) {
@@ -148,6 +188,8 @@ function drawEntities() {
         }
     }
 
+    // (Kiki bubble drawing moved to top-level drawKikiBubble so it can be called from loop)
+
     // whales
     whale1.draw();
     whale2.draw();
@@ -196,6 +238,108 @@ function drawEntities() {
     })();
 }
 
+    // draw floating speech bubbles (canvas-based)
+    function drawSpeechBubbles() {
+        if (scenario !== 0) return; // only for Antarctica for now
+        const now = Date.now();
+        // activate scheduled bubble
+        if (!splashBubble.shown && splashBubble.scheduledAt && now >= splashBubble.scheduledAt) {
+            splashBubble.shown = true;
+            splashBubble.active = true;
+            splashBubble.startTime = now;
+        }
+
+        if (splashBubble.active) {
+            const elapsed = now - splashBubble.startTime;
+            if (elapsed > splashBubble.duration) {
+                splashBubble.active = false;
+                return;
+            }
+
+            // fade in/out alpha
+            const fadeIn = 300;
+            const fadeOut = 500;
+            let alpha = 1;
+            if (elapsed < fadeIn) alpha = elapsed / fadeIn;
+            else if (elapsed > splashBubble.duration - fadeOut) alpha = Math.max(0, (splashBubble.duration - elapsed) / fadeOut);
+
+        // where to place the bubble: above and slightly right of whale2
+        const x = whale2.x + Math.min(whale2.size * 0.8, 48);
+        // make the bubble noticeably narrower on most screens
+        const maxW = Math.min(180, canvas.width * 0.28);
+            ctx.save();
+            ctx.globalAlpha = alpha;
+
+            // prepare text wrap and respect explicit newlines
+            ctx.font = `${Math.max(12, Math.round(canvas.width * 0.012))}px system-ui, sans-serif`;
+            const paragraphs = splashBubble.text.split('\n');
+            const lines = [];
+            for (const p of paragraphs) {
+                const words = p.split(' ');
+                let cur = '';
+                for (const w of words) {
+                    const test = cur ? cur + ' ' + w : w;
+                    if (ctx.measureText(test).width > maxW && cur) {
+                        lines.push(cur); cur = w;
+                    } else cur = test;
+                }
+                if (cur) lines.push(cur);
+                // do not insert extra blank lines between paragraphs to keep spacing tight
+            }
+
+            // tighter line spacing and smaller padding to compact the bubble
+            const lineHeight = Math.ceil(parseInt(ctx.font, 10) * 1.05);
+            const padding = 6;
+            // compute max measured line width so the bubble fits the text closely
+            const maxLineW = lines.reduce((m, l) => Math.max(m, ctx.measureText(l).width), 0);
+            const bW = Math.min(maxW, Math.max(80, Math.round(maxLineW))) + padding * 2;
+            const bH = lines.length * lineHeight + padding * 2;
+            let bX = x;
+            // avoid overflowing right edge
+            if (bX + bW > canvas.width - 8) bX = canvas.width - bW - 8;
+            let bY = Math.max(8, whale2.y - whale2.size - bH - 8);
+
+            // rounded rect with tail pointing to whale
+            const radius = 8;
+            ctx.fillStyle = 'rgba(255,255,255,0.96)';
+            ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+            ctx.lineWidth = 1.5;
+            // drop shadow
+            ctx.shadowColor = 'rgba(0,0,0,0.25)';
+            ctx.shadowBlur = 8;
+            ctx.beginPath();
+            ctx.moveTo(bX + radius, bY);
+            ctx.arcTo(bX + bW, bY, bX + bW, bY + bH, radius);
+            ctx.arcTo(bX + bW, bY + bH, bX, bY + bH, radius);
+            ctx.arcTo(bX, bY + bH, bX, bY, radius);
+            ctx.arcTo(bX, bY, bX + bW, bY, radius);
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+
+            // draw small tail (triangle) pointing to whale
+            ctx.beginPath();
+            const tailX = Math.min(whale2.x + 8, bX + bW - 12);
+            ctx.moveTo(tailX, bY + bH);
+            ctx.lineTo(tailX + 8, bY + bH + 14);
+            ctx.lineTo(tailX + 18, bY + bH);
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+
+            // draw text
+            ctx.fillStyle = '#000';
+            ctx.textBaseline = 'top';
+            let ty = bY + padding;
+            for (const line of lines) {
+                ctx.fillText(line, bX + padding, ty);
+                ty += lineHeight;
+            }
+
+            ctx.restore();
+        }
+    }
+
 function spawnBaby(mother) {
     const b = new Whale(mother.x - 40, mother.y + 20, mother.controls, mother.colors);
     b.size = mother.size * 0.55;
@@ -205,6 +349,73 @@ function spawnBaby(mother) {
     // Name the calf
     b.name = 'Sandy';
     baby = b;
+}
+
+// draw Kiki (Bubbles) speech bubble anchored to whale1 (top-level so loop can call it)
+function drawKikiBubble() {
+    if (!kikiBubble.active) return;
+    const now = Date.now();
+    const elapsed = now - kikiBubble.startTime;
+    if (elapsed > kikiBubble.duration) { kikiBubble.active = false; return; }
+
+    // fade in/out
+    const fadeIn = 300, fadeOut = 400;
+    let alpha = 1;
+    if (elapsed < fadeIn) alpha = elapsed / fadeIn;
+    else if (elapsed > kikiBubble.duration - fadeOut) alpha = Math.max(0, (kikiBubble.duration - elapsed) / fadeOut);
+
+    // anchor above whale1
+    const x = whale1.x + Math.min(whale1.size * 0.6, 32);
+    const maxW = Math.min(220, canvas.width * 0.32);
+    ctx.save(); ctx.globalAlpha = alpha;
+    ctx.font = `${Math.max(12, Math.round(canvas.width * 0.012))}px system-ui, sans-serif`;
+    const paragraphs = kikiBubble.text.split('\n');
+    const lines = [];
+    for (const p of paragraphs) {
+        const words = p.split(' ');
+        let cur = '';
+        for (const w of words) {
+            const test = cur ? cur + ' ' + w : w;
+            if (ctx.measureText(test).width > maxW && cur) { lines.push(cur); cur = w; } else cur = test;
+        }
+        if (cur) lines.push(cur);
+    }
+    const lineHeight = Math.ceil(parseInt(ctx.font, 10) * 1.05);
+    const padding = 6;
+    const maxLineW = lines.reduce((m, l) => Math.max(m, ctx.measureText(l).width), 0);
+    const bW = Math.min(maxW, Math.max(80, Math.round(maxLineW))) + padding * 2;
+    const bH = lines.length * lineHeight + padding * 2;
+    let bX = x;
+    if (bX + bW > canvas.width - 8) bX = canvas.width - bW - 8;
+    let bY = Math.max(8, whale1.y - whale1.size - bH - 8);
+
+    // draw rounded rect
+    const radius = 8;
+    ctx.fillStyle = 'rgba(255,255,255,0.98)';
+    ctx.strokeStyle = 'rgba(0,0,0,0.28)'; ctx.lineWidth = 1.5;
+    ctx.shadowColor = 'rgba(0,0,0,0.22)'; ctx.shadowBlur = 6;
+    ctx.beginPath();
+    ctx.moveTo(bX + radius, bY);
+    ctx.arcTo(bX + bW, bY, bX + bW, bY + bH, radius);
+    ctx.arcTo(bX + bW, bY + bH, bX, bY + bH, radius);
+    ctx.arcTo(bX, bY + bH, bX, bY, radius);
+    ctx.arcTo(bX, bY, bX + bW, bY, radius);
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+
+    // tail triangle
+    ctx.beginPath();
+    const tailX = Math.min(whale1.x + 8, bX + bW - 12);
+    ctx.moveTo(tailX, bY + bH);
+    ctx.lineTo(tailX + 8, bY + bH + 12);
+    ctx.lineTo(tailX + 18, bY + bH);
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+
+    // text
+    ctx.fillStyle = '#000'; ctx.textBaseline = 'top';
+    let ty = bY + padding;
+    for (const line of lines) { ctx.fillText(line, bX + padding, ty); ty += lineHeight; }
+
+    ctx.restore();
 }
 
 function updateBaby() {
@@ -277,7 +488,23 @@ function loop(){
     }
     if (baby) updateBaby();
 
+    // Kiki bubble triggers: when either whale first reaches 3 krill eaten,
+    // show the bubble anchored to Bubbles (whale1) for 5s.
+    const now = Date.now();
+    if (!kikiBubble.triggeredByWhale1 && whale1.krillEaten >= 3) {
+        kikiBubble.triggeredByWhale1 = true;
+        kikiBubble.shown = true; kikiBubble.active = true; kikiBubble.startTime = now;
+    }
+    if (!kikiBubble.triggeredByWhale2 && whale2.krillEaten >= 3) {
+        kikiBubble.triggeredByWhale2 = true;
+        kikiBubble.shown = true; kikiBubble.active = true; kikiBubble.startTime = now;
+    }
+
     drawEntities();
+    // Draw canvas speech bubbles after entities so they overlay whales
+    drawSpeechBubbles();
+    // draw Bubbles/Kiki bubble after other bubbles so it overlays appropriately
+    drawKikiBubble();
     updateHUD(whale1, whale2, baby);
 
     if (missionReady) {
