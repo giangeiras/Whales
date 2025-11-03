@@ -184,6 +184,26 @@ let splashAfterBothFiveBubble = {
     triggered: false
 };
 
+// When both whales are full (10 krill each) in Antarctica show two short bubbles
+let splashFullBubble = {
+    text: 'Are you full?',
+    shown: false,
+    active: false,
+    startTime: 0,
+    duration: 2000,
+    triggered: false
+};
+
+let bubblesFullBubble = {
+    text: "Yes! Let's follow the current north!",
+    shown: false,
+    active: false,
+    startTime: 0,
+    scheduledAt: 0,
+    duration: 2000,
+    triggered: false
+};
+
 let scenarioStartTime = Date.now();
 // Small flourish state (for bubble pop visuals)
 let bubbleFlourishes = [];
@@ -211,11 +231,14 @@ let gradientTransition = {
     crossfadeDuration: 4000,
     finished: false,
     // typewriter text shown during the final gradient
-    text: "Thank you for playing :) Whales say thanks.",
+    text: "Thank you for playing with the whales :)",
     typingSpeed: 55, // ms per character
     typeStartTime: 0,
     typeStarted: false
 };
+
+// allow runtime override of the corals image used for the final gradient
+gradientTransition.coralsSrc = 'src/assets/gradientcorals.png';
 
 // Play a short bubble/pop sound using WebAudio (one-shot)
 function playBubbleSound() {
@@ -247,6 +270,49 @@ coralsImg.onload = () => { coralsImgLoaded = true; };
 coralsImg.onerror = (e) => { coralsImgLoaded = false; console.info('corals.png not found or failed to load; using procedural corals fallback.'); };
 // corals image removed for final scene; do not load external asset
 coralsImg.src = '';
+
+// optional decorative overlay for the final gradient (placed at bottom)
+const gradientCoralsImg = new Image();
+let gradientCoralsImgLoaded = false;
+gradientCoralsImg.onload = () => { gradientCoralsImgLoaded = true; };
+gradientCoralsImg.onload = () => { gradientCoralsImgLoaded = true; console.info('gradientcorals.png loaded'); };
+gradientCoralsImg.onerror = () => {
+    gradientCoralsImgLoaded = false;
+    console.info('gradientcorals.png failed to load from src/assets/gradientcorals.png');
+    // try alternative relative paths (some servers/paths may differ)
+    try {
+        if (!gradientCoralsImg.src.endsWith('/src/assets/gradientcorals.png')) {
+            gradientCoralsImg.src = './src/assets/gradientcorals.png';
+            return;
+        }
+    } catch (e) {}
+};
+// prefer project asset path; if missing, the draw step will quietly skip
+// initialize src from gradientTransition config (can be overridden at runtime)
+gradientCoralsImg.src = (gradientTransition && gradientTransition.coralsSrc) ? gradientTransition.coralsSrc : 'src/assets/gradientcorals.png';
+
+// helper to change the corals image at runtime (useful from console)
+function setGradientCoralsSrc(src) {
+    try {
+        if (!src) return;
+        gradientTransition.coralsSrc = src;
+        gradientCoralsImgLoaded = false;
+        gradientCoralsImg.src = src;
+        console.info('Attempting to load gradient corals from', src);
+    } catch (e) { console.info('Failed to set gradient corals src', e); }
+}
+// expose globally for quick runtime debugging
+try { window.setGradientCoralsSrc = setGradientCoralsSrc; } catch (e) {}
+// expose some helpers/state to the global window for easier debugging in DevTools
+try {
+    if (typeof window !== 'undefined') {
+        // don't override if other code set these already
+        if (!window.gradientTransition) window.gradientTransition = gradientTransition;
+        if (!window.gradientCoralsImg) window.gradientCoralsImg = gradientCoralsImg;
+        if (typeof window.gradientCoralsImgLoaded === 'undefined') window.gradientCoralsImgLoaded = gradientCoralsImgLoaded;
+        if (!window.startEndSequence) window.startEndSequence = startEndSequence;
+    }
+} catch (e) { /* ignore when window isn't available */ }
 
 function initGame() {
     window.addEventListener("resize", resize, {passive: true});
@@ -306,6 +372,9 @@ function initScenario(s) {
     splashThirdJumpBubble.shown = false; splashThirdJumpBubble.active = false; splashThirdJumpBubble.startTime = 0; splashThirdJumpBubble.scheduledAt = 0; splashThirdJumpBubble.triggered = false;
     bubblesFourthJumpBubble.shown = false; bubblesFourthJumpBubble.active = false; bubblesFourthJumpBubble.startTime = 0; bubblesFourthJumpBubble.triggered = false;
     splashAfterBothFiveBubble.shown = false; splashAfterBothFiveBubble.active = false; splashAfterBothFiveBubble.startTime = 0; splashAfterBothFiveBubble.scheduledAt = 0; splashAfterBothFiveBubble.triggered = false;
+    // reset full-belly bubbles
+    splashFullBubble.shown = false; splashFullBubble.active = false; splashFullBubble.startTime = 0; splashFullBubble.triggered = false;
+    bubblesFullBubble.shown = false; bubblesFullBubble.active = false; bubblesFullBubble.startTime = 0; bubblesFullBubble.scheduledAt = 0; bubblesFullBubble.triggered = false;
     // reset sky banners
     if (typeof skyBanner !== 'undefined') { skyBanner.shown = false; skyBanner.active = false; skyBanner.startTime = 0; skyBanner.finished = false; skyBanner.finishTime = 0; }
     if (typeof skyBanner2 !== 'undefined') { skyBanner2.shown = false; skyBanner2.active = false; skyBanner2.startTime = 0; skyBanner2.scheduledAt = 0; skyBanner2.finished = false; skyBanner2.finishTime = 0; }
@@ -920,6 +989,74 @@ function updateLoveParticles() {
             loveParticles.splice(i, 1);
         }
     }
+}
+
+// draw Splash's "Are you full?" bubble
+function drawSplashFullBubble() {
+    if (!splashFullBubble || !splashFullBubble.active) return;
+    const now = Date.now();
+    const elapsed = now - splashFullBubble.startTime;
+    if (elapsed > splashFullBubble.duration) { splashFullBubble.active = false; return; }
+    const fadeIn = 200, fadeOut = 200;
+    let alpha = 1;
+    if (elapsed < fadeIn) alpha = elapsed / fadeIn;
+    else if (elapsed > splashFullBubble.duration - fadeOut) alpha = Math.max(0, (splashFullBubble.duration - elapsed) / fadeOut);
+
+    // draw similar to splash bubble: above and slightly right of whale2
+    const x = whale2.x + Math.min(whale2.size * 0.8, 48);
+    const maxW = Math.min(180, W * 0.28);
+    ctx.save(); ctx.globalAlpha = alpha;
+    ctx.font = `${Math.max(12, Math.round(W * 0.012))}px system-ui, sans-serif`;
+    const text = splashFullBubble.text;
+    const textW = ctx.measureText(text).width;
+    const padding = 6; const lineHeight = Math.ceil(parseInt(ctx.font, 10) * 1.05);
+    const bW = Math.min(maxW, Math.max(80, Math.round(textW))) + padding * 2;
+    const bH = lineHeight + padding * 2;
+    let bX = x; if (bX + bW > W - 8) bX = W - bW - 8;
+    let bY = Math.max(8, whale2.y - whale2.size - bH - 8);
+    const radius = 8;
+    ctx.fillStyle = 'rgba(255,255,255,0.98)'; ctx.strokeStyle = 'rgba(0,0,0,0.28)'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(bX + radius, bY); ctx.arcTo(bX + bW, bY, bX + bW, bY + bH, radius);
+    ctx.arcTo(bX + bW, bY + bH, bX, bY + bH, radius); ctx.arcTo(bX, bY + bH, bX, bY, radius);
+    ctx.arcTo(bX, bY, bX + bW, bY, radius); ctx.closePath(); ctx.fill(); ctx.stroke();
+    // text
+    ctx.fillStyle = '#000'; ctx.textBaseline = 'top'; ctx.fillText(text, bX + padding, bY + padding);
+    ctx.restore();
+}
+
+// draw Bubbles' reply "Yes! Let's follow the current north!"
+function drawBubblesFullBubble() {
+    const now = Date.now();
+    // activate if scheduled
+    if (!bubblesFullBubble.shown && bubblesFullBubble.scheduledAt && now >= bubblesFullBubble.scheduledAt) {
+        bubblesFullBubble.shown = true; bubblesFullBubble.active = true; bubblesFullBubble.startTime = now;
+    }
+    if (!bubblesFullBubble.active) return;
+    const elapsed = now - bubblesFullBubble.startTime;
+    if (elapsed > bubblesFullBubble.duration) { bubblesFullBubble.active = false; return; }
+    const fadeIn = 200, fadeOut = 200;
+    let alpha = 1;
+    if (elapsed < fadeIn) alpha = elapsed / fadeIn;
+    else if (elapsed > bubblesFullBubble.duration - fadeOut) alpha = Math.max(0, (bubblesFullBubble.duration - elapsed) / fadeOut);
+
+    const x = whale1.x + Math.min(whale1.size * 0.8, 48);
+    const maxW = Math.min(220, W * 0.32);
+    ctx.save(); ctx.globalAlpha = alpha;
+    ctx.font = `${Math.max(12, Math.round(W * 0.012))}px system-ui, sans-serif`;
+    const text = bubblesFullBubble.text;
+    const textW = ctx.measureText(text).width;
+    const padding = 6; const lineHeight = Math.ceil(parseInt(ctx.font, 10) * 1.05);
+    const bW = Math.min(maxW, Math.max(80, Math.round(textW))) + padding * 2;
+    const bH = lineHeight + padding * 2;
+    let bX = x; if (bX + bW > W - 8) bX = W - bW - 8;
+    let bY = Math.max(8, whale1.y - whale1.size - bH - 8);
+    const radius = 8;
+    ctx.fillStyle = 'rgba(255,255,255,0.98)'; ctx.strokeStyle = 'rgba(0,0,0,0.28)'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(bX + radius, bY); ctx.arcTo(bX + bW, bY, bX + bW, bY + bH, radius);
+    ctx.arcTo(bX + bW, bY + bH, bX, bY + bH, radius); ctx.arcTo(bX, bY + bH, bX, bY, radius);
+    ctx.arcTo(bX, bY, bX + bW, bY, radius); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#000'; ctx.textBaseline = 'top'; ctx.fillText(text, bX + padding, bY + padding);
+    ctx.restore();
 }
 
 // Função para desenhar os corações (chame após desenhar as baleias)
@@ -1749,6 +1886,15 @@ function startEndSequence() {
         // schedule typewriter to begin 2000ms after the gradient appears
         gradientTransition.typeStartTime = Date.now() + 2000;
         gradientTransition.typeStarted = true;
+        // ensure corals image is (re)loaded from configured source when sequence starts
+        try {
+            const src = gradientTransition && gradientTransition.coralsSrc;
+            if (src && (!gradientCoralsImgLoaded || gradientCoralsImg.src.indexOf(src) === -1)) {
+                gradientCoralsImgLoaded = false;
+                gradientCoralsImg.src = src;
+                console.info('Loading gradient corals from', src);
+            }
+        } catch (e) {}
     } catch (e) {}
 }
 
@@ -2037,6 +2183,16 @@ function loop(){
         }
     } catch (e) {}
 
+    // When both whales have 10 or more krill in Antarctica, trigger the two-line exchange
+    try {
+        if (scenario === 0 && !splashFullBubble.triggered && whale1.krillEaten >= 10 && whale2.krillEaten >= 10) {
+            splashFullBubble.triggered = true;
+            splashFullBubble.shown = true; splashFullBubble.active = true; splashFullBubble.startTime = now;
+            // schedule Bubbles reply 2s later
+            bubblesFullBubble.triggered = true; bubblesFullBubble.scheduledAt = now + 2000; bubblesFullBubble.shown = false; bubblesFullBubble.active = false;
+        }
+    } catch (e) {}
+
     // Apply camera transform if the end sequence requested a gentle zoom-out
     let cameraPushed = false;
     try { cameraPushed = applyCameraTransform(); } catch (e) { cameraPushed = false; }
@@ -2071,6 +2227,10 @@ function loop(){
     try { drawSplashAfterBothFiveBubble(); } catch (e) {}
     // small visual flourishes for bubble pops
     try { drawBubbleFlourishes(); } catch (e) {}
+
+    // draw full-belly bubbles if scheduled/active
+    try { drawSplashFullBubble(); } catch (e) {}
+    try { drawBubblesFullBubble(); } catch (e) {}
 
     // If a gradient crossfade is active, compute progress and draw it on top
     if (gradientTransition && gradientTransition.active) {
