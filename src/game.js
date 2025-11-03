@@ -45,6 +45,28 @@ let sydneyBubble = {
     duration: 3000
 };
 
+// Warmer-waters bubble for Bubbles (whale1) shown after warmer-waters modal is dismissed.
+// This bubble stays active until the whales swim close together (handled in draw).
+let warmerBubble = {
+    text: "It's time. Swim close to me.",
+    shown: false,
+    active: false,
+    startTime: 0,
+    triggered: false
+};
+
+// Sky banner shown after a calf is born: typewriter animation in the sky area
+let skyBanner = {
+    text: 'A calf is born! Warm northern seas are perfect for babies.',
+    shown: false,
+    active: false,
+    startTime: 0,
+    typingSpeed: 45, // ms per character
+    displayDuration: 6000, // ms to keep full text visible after typing
+    finished: false,
+    finishTime: 0
+};
+
 // Splash (whale2) reaction bubble in Sydney triggered after Bubbles (whale1) does 1 jump
 let splashSydneyBubble = {
     text: 'That was a mighty breach!',
@@ -52,6 +74,27 @@ let splashSydneyBubble = {
     active: false,
     startTime: 0,
     duration: 3000,
+    triggered: false
+};
+
+// Baby-announce bubbles: appear shortly after the calf is born
+let splashBabyBubble = {
+    text: 'Welcome, tiny swimmer.',
+    shown: false,
+    active: false,
+    startTime: 0,
+    scheduledAt: 0,
+    duration: 4000,
+    triggered: false
+};
+
+let bubblesBabyBubble = {
+    text: 'Stay by my side, little one.',
+    shown: false,
+    active: false,
+    startTime: 0,
+    scheduledAt: 0,
+    duration: 4000,
     triggered: false
 };
 
@@ -199,6 +242,9 @@ function initScenario(s) {
     splashThirdJumpBubble.shown = false; splashThirdJumpBubble.active = false; splashThirdJumpBubble.startTime = 0; splashThirdJumpBubble.scheduledAt = 0; splashThirdJumpBubble.triggered = false;
     bubblesFourthJumpBubble.shown = false; bubblesFourthJumpBubble.active = false; bubblesFourthJumpBubble.startTime = 0; bubblesFourthJumpBubble.triggered = false;
     splashAfterBothFiveBubble.shown = false; splashAfterBothFiveBubble.active = false; splashAfterBothFiveBubble.startTime = 0; splashAfterBothFiveBubble.scheduledAt = 0; splashAfterBothFiveBubble.triggered = false;
+    // reset baby-announcement bubbles
+    splashBabyBubble.shown = false; splashBabyBubble.active = false; splashBabyBubble.startTime = 0; splashBabyBubble.scheduledAt = 0; splashBabyBubble.triggered = false;
+    bubblesBabyBubble.shown = false; bubblesBabyBubble.active = false; bubblesBabyBubble.startTime = 0; bubblesBabyBubble.scheduledAt = 0; bubblesBabyBubble.triggered = false;
 
     // reset whale counters/state
     whale1.krillEaten = 0; whale1.jumpsDone = 0; whale1.joined = false;
@@ -224,6 +270,8 @@ function initScenario(s) {
         // warmer waters: no fish
         spawnFish(0);
         spawnSeagulls(4);
+        // show warmer waters intro modal which invites players to visit the newborn calf
+        try { showWarmerModal(); } catch (e) {}
     }
 
     // position whales
@@ -258,38 +306,39 @@ function createAntarcticaModal() {
 
     const modal = document.createElement('div');
     modal.id = 'antarctica-modal';
-    // position it in the center of the sky (sky occupies top 30vh; center ~15vh)
+    // style to match Sydney modal (compact, centered)
     Object.assign(modal.style, {
-        position: 'fixed', left: '50%', top: '25%', transform: 'translate(-50%, -50%)',
-        zIndex: 100001, background: 'rgba(255,255,255,0.7)', color: '#000', padding: '35px 50px',
-        borderRadius: '10px', maxWidth: '520px', width: 'min(64vw, 520px)', boxShadow: '0 8px 30px rgba(0,0,0,0.35)',
-        fontFamily: 'system-ui, sans-serif', fontSize: '22px', lineHeight: '1.4', textAlign: 'center'
+        position: 'fixed', left: '50%', top: '35%', transform: 'translate(-50%, -50%)',
+        zIndex: 100001, background: 'rgba(255,255,255,0.95)', color: '#000', padding: '20px 28px',
+        borderRadius: '10px', maxWidth: '420px', width: 'min(80vw, 420px)', boxShadow: '0 8px 30px rgba(0,0,0,0.25)',
+        fontFamily: 'system-ui, sans-serif', fontSize: '16px', lineHeight: '1.35', textAlign: 'center'
     });
 
     // (no close button — modal must be dismissed with the "x" key)
 
     const msg = document.createElement('div');
     msg.id = 'antarctica-modal-text';
-    msg.textContent = 'Guide the pair to eat krills in Antarctica so they can build energy for their long swim north to warmer seas.';
-    // ensure message wraps nicely inside the narrower modal and stays left-aligned
-    Object.assign(msg.style, { whiteSpace: 'normal', overflowWrap: 'break-word', textAlign: 'left' });
+    // emphasize the action phrases so they stand out in the intro modal
+    msg.innerHTML = "Guide the pair to <strong>eat krills</strong> in Antarctica so they can <strong>build energy</strong> for their <strong>long swim north to warmer seas</strong>.";
+    // ensure message wraps nicely and is centered like Sydney modal; cap visually to ~3 lines
+    Object.assign(msg.style, {
+        whiteSpace: 'normal',
+        overflowWrap: 'break-word',
+        textAlign: 'center',
+        maxHeight: '66px',
+        overflow: 'hidden',
+        color: '#1a8fc9'
+    });
     modal.appendChild(msg);
 
     const hint = document.createElement('div');
     hint.id = 'antarctica-modal-hint';
     hint.textContent = "Press 'X' to continue";
-    // Rounded transparent container with black stroke, centered and padded
+    // Rounded transparent hint matching Sydney modal
     Object.assign(hint.style, {
-        margin: '20px auto 0',
-        fontSize: '16px',
-        opacity: '0.95',
-        textAlign: 'center',
-        background: 'lightblue',
-        border: '1.5px solid rgba(0,0,0,0.95)',
-        borderRadius: '10px',
-        padding: '8px 14px',
-        display: 'inline-block',
-        boxSizing: 'border-box'
+        margin: '12px auto 0', fontSize: '13px', opacity: '0.95', textAlign: 'center',
+        background: '#1a8fc9', border: '1px solid rgba(0,0,0,0.09)', borderRadius: '8px', padding: '6px 10px',
+        display: 'inline-block', boxSizing: 'border-box', color: '#ffffff'
     });
     modal.appendChild(hint);
 
@@ -357,25 +406,34 @@ function createSydneyModal() {
     const modal = document.createElement('div');
     modal.id = 'sydney-modal';
     Object.assign(modal.style, {
-        position: 'fixed', left: '50%', top: '40%', transform: 'translate(-50%, -50%)',
-        zIndex: 100001, background: 'rgba(255,255,255,0.85)', color: '#000', padding: '30px 44px',
-        borderRadius: '10px', maxWidth: '520px', width: 'min(64vw, 520px)', boxShadow: '0 8px 30px rgba(0,0,0,0.35)',
-        fontFamily: 'system-ui, sans-serif', fontSize: '20px', lineHeight: '1.4', textAlign: 'center'
+        position: 'fixed', left: '50%', top: '35%', transform: 'translate(-50%, -50%)',
+        zIndex: 100001, background: 'rgba(255,255,255,0.95)', color: '#000', padding: '20px 28px',
+        borderRadius: '10px', maxWidth: '420px', width: 'min(80vw, 420px)', boxShadow: '0 8px 30px rgba(0,0,0,0.25)',
+        fontFamily: 'system-ui, sans-serif', fontSize: '16px', lineHeight: '1.35', textAlign: 'center'
     });
 
     const msg = document.createElement('div');
     msg.id = 'sydney-modal-text';
-    msg.textContent = "Let's help the whales pop up and jump near Sydney! That jump is called a breach. They might be saying hello, getting rid of itchy bugs, or showing they're strong.";
-    Object.assign(msg.style, { whiteSpace: 'normal', overflowWrap: 'break-word', textAlign: 'left' });
+    // allow natural wrapping and center the text; cap visually to ~3 lines with maxHeight
+    // add emphasis to important phrases
+    msg.innerHTML = "Let's help the whales <strong>pop up and jump</strong> near Sydney! That jump is called a <strong>breach</strong>. They might be saying hello, getting rid of itchy bugs, or showing they're strong.";
+    Object.assign(msg.style, {
+        whiteSpace: 'normal',
+        overflowWrap: 'break-word',
+        textAlign: 'center',
+        maxHeight: '66px', // ~3 lines at 16px font + line-height
+        overflow: 'hidden',
+        color: '#1a8fc9'
+    });
     modal.appendChild(msg);
 
     const hint = document.createElement('div');
     hint.id = 'sydney-modal-hint';
     hint.textContent = "Press 'X' to continue";
     Object.assign(hint.style, {
-        margin: '20px auto 0', fontSize: '16px', opacity: '0.95', textAlign: 'center',
-        background: 'transparent', border: '1.5px solid rgba(0,0,0,0.95)', borderRadius: '10px', padding: '8px 14px',
-        display: 'inline-block', boxSizing: 'border-box'
+        margin: '12px auto 0', fontSize: '13px', opacity: '0.95', textAlign: 'center',
+        background: '#1a8fc9', border: '1px solid rgba(0,0,0,0.09)', borderRadius: '8px', padding: '6px 10px',
+        display: 'inline-block', boxSizing: 'border-box', color: '#ffffff'
     });
     modal.appendChild(hint);
 
@@ -414,6 +472,89 @@ function hideSydneyModal() {
             bubbleFlourishes.push({ x: whale1.x, y: whale1.y - (whale1.size || 40), t: Date.now() });
         }
     } catch (e) { /* ignore if sydneyBubble undefined */ }
+    if (modal.__keyHandler) window.removeEventListener('keydown', modal.__keyHandler);
+}
+
+// Warmer-waters intro modal: appears when entering the warmer seas scenario and blocks interactions
+function createWarmerModal() {
+    if (document.getElementById('warmer-modal')) return;
+    let overlay = document.getElementById('modal-overlay');
+    if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.id = 'modal-overlay';
+        Object.assign(overlay.style, {
+            position: 'fixed', left: '0', top: '0', width: '100vw', height: '100vh',
+            background: 'rgba(0,0,0,0.6)', zIndex: 100000, display: 'none', pointerEvents: 'auto'
+        });
+        document.body.appendChild(overlay);
+    }
+
+    const modal = document.createElement('div');
+    modal.id = 'warmer-modal';
+    Object.assign(modal.style, {
+        position: 'fixed', left: '50%', top: '35%', transform: 'translate(-50%, -50%)',
+        zIndex: 100001, background: 'rgba(255,255,255,0.95)', color: '#000', padding: '20px 28px',
+        borderRadius: '10px', maxWidth: '420px', width: 'min(80vw, 420px)', boxShadow: '0 8px 30px rgba(0,0,0,0.25)',
+        fontFamily: 'system-ui, sans-serif', fontSize: '16px', lineHeight: '1.35', textAlign: 'center'
+    });
+
+    const msg = document.createElement('div');
+    msg.id = 'warmer-modal-text';
+    // message for warmer waters
+    msg.innerHTML = 'In the warm northern seas, mums and dads stay close to welcome a newborn calf. <strong>Guide the whales together to say hello to the baby.</strong>';
+    Object.assign(msg.style, {
+        whiteSpace: 'normal',
+        overflowWrap: 'break-word',
+        textAlign: 'center',
+        maxHeight: '66px',
+        overflow: 'hidden',
+        color: '#1a8fc9'
+    });
+    modal.appendChild(msg);
+
+    const hint = document.createElement('div');
+    hint.id = 'warmer-modal-hint';
+    hint.textContent = "Press 'X' to continue";
+    Object.assign(hint.style, {
+        margin: '12px auto 0', fontSize: '13px', opacity: '0.95', textAlign: 'center',
+        background: '#1a8fc9', border: '1px solid rgba(0,0,0,0.09)', borderRadius: '8px', padding: '6px 10px',
+        display: 'inline-block', boxSizing: 'border-box', color: '#ffffff'
+    });
+    modal.appendChild(hint);
+
+    modal.__keyHandler = (e) => { if (!e) return; if (e.key && e.key.toLowerCase() === 'x') hideWarmerModal(); };
+
+    document.body.appendChild(modal);
+}
+
+function showWarmerModal() {
+    createWarmerModal();
+    const modal = document.getElementById('warmer-modal');
+    if (!modal) return;
+    const overlay = document.getElementById('modal-overlay');
+    if (overlay) overlay.style.display = 'block';
+    modal.style.display = 'block';
+    try { window.modalDialogActive = true; window.warmerDialogActive = true; } catch (e) {}
+    window.addEventListener('keydown', modal.__keyHandler);
+}
+
+function hideWarmerModal() {
+    const modal = document.getElementById('warmer-modal');
+    if (!modal) return;
+    modal.style.display = 'none';
+    const overlay = document.getElementById('modal-overlay');
+    if (overlay) overlay.style.display = 'none';
+    try { window.modalDialogActive = false; window.warmerDialogActive = false; } catch (e) {}
+    // Activate Bubbles' warmer-waters bubble when the modal is dismissed
+    try {
+        if (!warmerBubble.shown) {
+            warmerBubble.shown = true;
+            warmerBubble.active = true;
+            warmerBubble.startTime = Date.now();
+            warmerBubble.triggered = true;
+            try { playBubbleSound(); bubbleFlourishes.push({ x: whale1.x, y: whale1.y - (whale1.size || 40), t: Date.now() }); } catch (e) {}
+        }
+    } catch (e) { /* ignore if warmerBubble undefined */ }
     if (modal.__keyHandler) window.removeEventListener('keydown', modal.__keyHandler);
 }
 
@@ -672,6 +813,20 @@ function spawnBaby(mother) {
                 initialSpeed: speed
             });
         }
+        // trigger sky banner announcing the calf birth
+        try {
+            skyBanner.shown = true;
+            skyBanner.active = true;
+            skyBanner.startTime = Date.now();
+            skyBanner.finished = false;
+            skyBanner.finishTime = 0;
+            // schedule baby-related speech bubbles: Splash after 2s, Bubbles after 3s
+            const now = Date.now();
+            splashBabyBubble.scheduledAt = now + 2000;
+            splashBabyBubble.triggered = false; splashBabyBubble.shown = false; splashBabyBubble.active = false; splashBabyBubble.startTime = 0;
+            bubblesBabyBubble.scheduledAt = now + 3000;
+            bubblesBabyBubble.triggered = false; bubblesBabyBubble.shown = false; bubblesBabyBubble.active = false; bubblesBabyBubble.startTime = 0;
+        } catch (e) { /* ignore if skyBanner missing */ }
     }
 
 // Função para atualizar as partículas (chame no loop principal)
@@ -892,6 +1047,71 @@ function drawSplashSydneyBubble() {
     ctx.arcTo(bX + bW, bY + bH, bX, bY + bH, radius);
     ctx.arcTo(bX, bY + bH, bX, bY, radius);
     ctx.arcTo(bX, bY, bX + bW, bY, radius);
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+
+    ctx.fillStyle = '#000'; ctx.textBaseline = 'top';
+    ctx.fillText(text, bX + padding, bY + padding);
+    ctx.restore();
+}
+
+// draw warm-waters bubble anchored to whale1 (Bubbles). This bubble remains
+// visible until the two whales are close together.
+function drawWarmerBubble() {
+    if (!warmerBubble.active) return;
+    if (scenario !== 2) return; // only in warmer waters
+    const now = Date.now();
+    const elapsed = now - warmerBubble.startTime;
+
+    // determine if whales are close enough to dismiss the bubble
+    try {
+        const d = Math.hypot(whale1.x - whale2.x, whale1.y - whale2.y);
+        const closeThreshold = Math.min(whale1.size || 40, whale2.size || 40) * 0.8;
+        if (d <= closeThreshold) {
+            // they are close enough — hide the bubble
+            warmerBubble.active = false;
+            warmerBubble.shown = false;
+            return;
+        }
+    } catch (e) {
+        // if whales are undefined for some reason, just bail out
+        return;
+    }
+
+    // simple fade-in for a little polish
+    const fadeIn = 220;
+    let alpha = Math.min(1, Math.max(0.15, elapsed / fadeIn));
+
+    const x = whale1.x + Math.min(whale1.size * 0.6, 32);
+    const maxW = Math.min(260, canvas.width * 0.36);
+    ctx.save(); ctx.globalAlpha = alpha;
+    ctx.font = `${Math.max(13, Math.round(canvas.width * 0.012))}px system-ui, sans-serif`;
+    const text = warmerBubble.text;
+    const textW = ctx.measureText(text).width;
+    const padding = 8;
+    const bW = Math.min(maxW, Math.max(100, Math.round(textW))) + padding * 2;
+    const lineHeight = Math.ceil(parseInt(ctx.font,10) * 1.05);
+    const bH = lineHeight + padding * 2;
+    let bX = x;
+    if (bX + bW > canvas.width - 8) bX = canvas.width - bW - 8;
+    let bY = Math.max(8, whale1.y - whale1.size - bH - 8);
+
+    const radius = 8;
+    ctx.fillStyle = 'rgba(255,255,255,0.98)';
+    ctx.strokeStyle = 'rgba(0,0,0,0.28)'; ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(bX + radius, bY);
+    ctx.arcTo(bX + bW, bY, bX + bW, bY + bH, radius);
+    ctx.arcTo(bX + bW, bY + bH, bX, bY + bH, radius);
+    ctx.arcTo(bX, bY + bH, bX, bY, radius);
+    ctx.arcTo(bX, bY, bX + bW, bY, radius);
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+
+    // tail triangle pointing downwards toward the whale
+    ctx.beginPath();
+    const tailX = Math.min(whale1.x + 8, bX + bW - 12);
+    ctx.moveTo(tailX, bY + bH);
+    ctx.lineTo(tailX + 8, bY + bH + 12);
+    ctx.lineTo(tailX + 18, bY + bH);
     ctx.closePath(); ctx.fill(); ctx.stroke();
 
     ctx.fillStyle = '#000'; ctx.textBaseline = 'top';
@@ -1120,6 +1340,94 @@ function drawSplashAfterBothFiveBubble() {
     ctx.restore();
 }
 
+// draw Splash baby-welcome bubble: scheduled activation after baby spawn, anchored to whale2
+function drawSplashBabyBubble() {
+    const now = Date.now();
+    if (!splashBabyBubble.shown && splashBabyBubble.scheduledAt && now >= splashBabyBubble.scheduledAt) {
+        splashBabyBubble.shown = true;
+        splashBabyBubble.active = true;
+        splashBabyBubble.startTime = now;
+        try { playBubbleSound(); bubbleFlourishes.push({ x: whale2.x, y: whale2.y - (whale2.size || 40), t: Date.now() }); } catch (e) {}
+    }
+    if (!splashBabyBubble.active) return;
+    const elapsed = now - splashBabyBubble.startTime;
+    if (elapsed > splashBabyBubble.duration) { splashBabyBubble.active = false; return; }
+    const fadeIn = 120, fadeOut = 160;
+    let alpha = 1;
+    if (elapsed < fadeIn) alpha = elapsed / fadeIn;
+    else if (elapsed > splashBabyBubble.duration - fadeOut) alpha = Math.max(0, (splashBabyBubble.duration - elapsed) / fadeOut);
+    const x = whale2.x + Math.min(whale2.size * 0.6, 32);
+    const maxW = Math.min(220, canvas.width * 0.32);
+    ctx.save(); ctx.globalAlpha = alpha;
+    ctx.font = `${Math.max(12, Math.round(canvas.width * 0.012))}px system-ui, sans-serif`;
+    const text = splashBabyBubble.text;
+    const textW = ctx.measureText(text).width;
+    const padding = 8;
+    const bW = Math.min(maxW, Math.max(60, Math.round(textW))) + padding * 2;
+    const lineHeight = Math.ceil(parseInt(ctx.font,10) * 1.05);
+    const bH = lineHeight + padding * 2;
+    let bX = x;
+    if (bX + bW > canvas.width - 8) bX = canvas.width - bW - 8;
+    let bY = Math.max(8, whale2.y - whale2.size - bH - 8);
+    const radius = 8;
+    ctx.fillStyle = 'rgba(255,255,255,0.98)';
+    ctx.strokeStyle = 'rgba(0,0,0,0.28)'; ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(bX + radius, bY);
+    ctx.arcTo(bX + bW, bY, bX + bW, bY + bH, radius);
+    ctx.arcTo(bX + bW, bY + bH, bX, bY + bH, radius);
+    ctx.arcTo(bX, bY + bH, bX, bY, radius);
+    ctx.arcTo(bX, bY, bX + bW, bY, radius);
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#000'; ctx.textBaseline = 'top';
+    ctx.fillText(text, bX + padding, bY + padding);
+    ctx.restore();
+}
+
+// draw Bubbles baby-welcome bubble: scheduled activation after baby spawn, anchored to whale1
+function drawBubblesBabyBubble() {
+    const now = Date.now();
+    if (!bubblesBabyBubble.shown && bubblesBabyBubble.scheduledAt && now >= bubblesBabyBubble.scheduledAt) {
+        bubblesBabyBubble.shown = true;
+        bubblesBabyBubble.active = true;
+        bubblesBabyBubble.startTime = now;
+        try { playBubbleSound(); bubbleFlourishes.push({ x: whale1.x, y: whale1.y - (whale1.size || 40), t: Date.now() }); } catch (e) {}
+    }
+    if (!bubblesBabyBubble.active) return;
+    const elapsed = now - bubblesBabyBubble.startTime;
+    if (elapsed > bubblesBabyBubble.duration) { bubblesBabyBubble.active = false; return; }
+    const fadeIn = 120, fadeOut = 160;
+    let alpha = 1;
+    if (elapsed < fadeIn) alpha = elapsed / fadeIn;
+    else if (elapsed > bubblesBabyBubble.duration - fadeOut) alpha = Math.max(0, (bubblesBabyBubble.duration - elapsed) / fadeOut);
+    const x = whale1.x + Math.min(whale1.size * 0.6, 32);
+    const maxW = Math.min(220, canvas.width * 0.32);
+    ctx.save(); ctx.globalAlpha = alpha;
+    ctx.font = `${Math.max(12, Math.round(canvas.width * 0.012))}px system-ui, sans-serif`;
+    const text = bubblesBabyBubble.text;
+    const textW = ctx.measureText(text).width;
+    const padding = 8;
+    const bW = Math.min(maxW, Math.max(60, Math.round(textW))) + padding * 2;
+    const lineHeight = Math.ceil(parseInt(ctx.font,10) * 1.05);
+    const bH = lineHeight + padding * 2;
+    let bX = x;
+    if (bX + bW > canvas.width - 8) bX = canvas.width - bW - 8;
+    let bY = Math.max(8, whale1.y - whale1.size - bH - 8);
+    const radius = 8;
+    ctx.fillStyle = 'rgba(255,255,255,0.98)';
+    ctx.strokeStyle = 'rgba(0,0,0,0.28)'; ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(bX + radius, bY);
+    ctx.arcTo(bX + bW, bY, bX + bW, bY + bH, radius);
+    ctx.arcTo(bX + bW, bY + bH, bX, bY + bH, radius);
+    ctx.arcTo(bX, bY + bH, bX, bY, radius);
+    ctx.arcTo(bX, bY, bX + bW, bY, radius);
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#000'; ctx.textBaseline = 'top';
+    ctx.fillText(text, bX + padding, bY + padding);
+    ctx.restore();
+}
+
 // draw short-lived flourishes when bubbles appear
 function drawBubbleFlourishes() {
     if (!bubbleFlourishes || bubbleFlourishes.length === 0) return;
@@ -1143,6 +1451,48 @@ function drawBubbleFlourishes() {
         ctx.beginPath(); ctx.arc(f.x, f.y, radius, 0, Math.PI * 2); ctx.fill();
         ctx.restore();
     }
+}
+
+// draw a single-line typewriter banner in the sky after a calf is born
+function drawSkyBanner() {
+    if (!skyBanner || !skyBanner.active || !skyBanner.shown) return;
+    if (scenario !== 2) return; // only in warmer waters
+    const now = Date.now();
+    const elapsed = now - skyBanner.startTime;
+    const total = skyBanner.text.length;
+    // number of characters to show based on typingSpeed
+    const chars = Math.min(total, Math.floor(elapsed / Math.max(1, skyBanner.typingSpeed)));
+    let toShow = skyBanner.text.slice(0, chars);
+    const fontSize = Math.max(16, Math.round(canvas.width * 0.02));
+    ctx.save();
+    ctx.font = `${fontSize}px system-ui, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    // sky area: vertically place at roughly 35% of seaLevel (above the horizon), moved slightly down
+    const y = Math.max(28, seaLevel * 0.35) + 20;
+    const x = canvas.width / 2;
+    // add a blinking cursor while typing
+    if (chars < total) {
+        const blink = Math.floor(now / 400) % 2 === 0 ? '|' : ' ';
+        toShow = toShow + blink;
+    }
+    // draw the text without a shadow
+    ctx.fillStyle = '#053e63';
+    ctx.fillText(toShow, x, y);
+
+    // if finished typing, schedule hide after displayDuration
+    if (chars >= total) {
+        if (!skyBanner.finished) {
+            skyBanner.finished = true;
+            skyBanner.finishTime = now;
+        } else {
+            if (now - skyBanner.finishTime > skyBanner.displayDuration) {
+                skyBanner.active = false;
+                skyBanner.shown = false;
+            }
+        }
+    }
+    ctx.restore();
 }
 
 // compatibility wrapper: previously the bubble drawer was renamed to dialogue2
@@ -1209,6 +1559,8 @@ function loop(){
     if (!__loopStarted) { __loopStarted = true; try { console.debug && console.debug('game loop started'); } catch (e) {} }
 
     drawBackground();
+    // sky banner (typewriter) — appears after calf birth
+    try { drawSkyBanner(); } catch (e) {}
 
     missionReady = isMissionComplete();
 
@@ -1303,6 +1655,11 @@ function loop(){
     dialogue2();
     // draw Sydney-specific bubble (Bubbles) if active
     try { drawSydneyBubble(); } catch (e) { /* ignore if not available */ }
+    // draw warmer-waters bubble if active
+    try { drawWarmerBubble(); } catch (e) {}
+    // draw baby-welcome bubbles if scheduled/active
+    try { drawSplashBabyBubble(); } catch (e) {}
+    try { drawBubblesBabyBubble(); } catch (e) {}
     // draw Splash's reaction bubble in Sydney if active
     try { drawSplashSydneyBubble(); } catch (e) {}
     // draw Splash's short jump bubble if active
