@@ -1,4 +1,4 @@
-import { canvas, ctx, seaLevel } from '../utils/canvas.js';
+import { canvas, ctx, seaLevel, W, H } from '../utils/canvas.js';
 
 export let seagulls = [];
 
@@ -6,7 +6,7 @@ export function spawnSeagulls(n = 4) {
     seagulls = [];
     for (let i = 0; i < n; i++) {
         seagulls.push({
-            x: Math.random() * canvas.width,
+            x: Math.random() * W,
             y: seaLevel - 40 - Math.random() * 80,
             speed: 0.4 + Math.random() * 0.6,
             wing: Math.random() * Math.PI * 2
@@ -17,7 +17,7 @@ export function spawnSeagulls(n = 4) {
 export function updateSeagulls() {
     for (let g of seagulls) {
         g.x += g.speed;
-        if (g.x > canvas.width + 50) g.x = -50;
+    if (g.x > W + 50) g.x = -50;
         g.wing += 0.2;
     }
 }

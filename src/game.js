@@ -1,5 +1,5 @@
 import { Whale } from './entities/whale.js';
-import { canvas, ctx, seaLevel, resize } from './utils/canvas.js';
+import { canvas, ctx, seaLevel, resize, W, H, DPR } from './utils/canvas.js';
 import { initInput } from './utils/input.js';
 
 import { spawnKrill, updateKrill, drawKrill } from './entities/krill.js';
@@ -188,6 +188,35 @@ let scenarioStartTime = Date.now();
 // Small flourish state (for bubble pop visuals)
 let bubbleFlourishes = [];
 
+// end-of-sequence visual/audio state
+let endSequenceTriggered = false;
+let cameraEase = {
+    active: false,
+    startTime: 0,
+    duration: 1600,
+    from: 1,
+    to: 0.92
+};
+let currentCameraScale = 1;
+
+let endSceneFrozen = false;
+
+let gradientTransition = {
+    active: false,
+    startTime: 0,
+    duration: 8000,
+    speed: 0.6,
+    intensity: 0.95,
+    // crossfade duration in ms for smooth transition from game -> gradient
+    crossfadeDuration: 4000,
+    finished: false,
+    // typewriter text shown during the final gradient
+    text: "Thank you for playing :) Whales say thanks.",
+    typingSpeed: 55, // ms per character
+    typeStartTime: 0,
+    typeStarted: false
+};
+
 // Play a short bubble/pop sound using WebAudio (one-shot)
 function playBubbleSound() {
     try {
@@ -216,18 +245,19 @@ const coralsImg = new Image();
 let coralsImgLoaded = false;
 coralsImg.onload = () => { coralsImgLoaded = true; };
 coralsImg.onerror = (e) => { coralsImgLoaded = false; console.info('corals.png not found or failed to load; using procedural corals fallback.'); };
-coralsImg.src = 'src/assets/corals.png';
+// corals image removed for final scene; do not load external asset
+coralsImg.src = '';
 
 function initGame() {
     window.addEventListener("resize", resize, {passive: true});
     resize();
 
-    whale1 = new Whale(canvas.width/2, seaLevel + 200,
+    whale1 = new Whale(W/2, seaLevel + 200,
         {up:'w', down:'s', left:'a', right:'d', jump:'t'},
         {body1:'#0a4770', body2:'#0c628f', tail:'#093e5f'}
     );
     
-    whale2 = new Whale(canvas.width/2 + 180, seaLevel + 260,
+    whale2 = new Whale(W/2 + 180, seaLevel + 260,
         {up:'arrowup', down:'arrowdown', left:'arrowleft', right:'arrowright', jump:'o'},
         {body1:'#0b4c78', body2:'#0e6c9f', tail:'#093e5f'}
     );
@@ -312,12 +342,12 @@ function initScenario(s) {
     }
 
     // position whales
-    const centerX = canvas.width / 2;
+    const centerX = W / 2;
     const horizSpacing = Math.max(whale1.size, 120);
     whale1.x = centerX - horizSpacing;
     whale2.x = centerX + horizSpacing;
-    whale1.y = canvas.height / 2;
-    whale2.y = canvas.height / 2 + Math.min(whale2.size * 0.35, 40);
+    whale1.y = H / 2;
+    whale2.y = H / 2 + Math.min(whale2.size * 0.35, 40);
     whale1.vx = whale1.vy = whale2.vx = whale2.vy = 0;
 
     whale1.target = whale2.target = null;
@@ -596,7 +626,9 @@ function hideWarmerModal() {
 }
 
 function drawBackground() {
-    const w = canvas.width, h = canvas.height;
+    const w = W, h = H;
+    // draw regular background (sky is provided by the image behind the canvas)
+
     let sky, sea;
     if (scenario === 0) {
         sky = ctx.createLinearGradient(0,0,0,seaLevel); sky.addColorStop(0,"#dff4ff"); sky.addColorStop(1,"#9fdcff");
@@ -643,17 +675,17 @@ function drawEntities() {
             updateFish();
             drawFish();
             // draw corals image aligned to bottom with a subtle sway/parallax so it feels alive
-            const imgW = coralsImg.naturalWidth || canvas.width;
-            const imgH = coralsImg.naturalHeight || Math.floor(canvas.height * 0.18);
+            const imgW = coralsImg.naturalWidth || W;
+            const imgH = coralsImg.naturalHeight || Math.floor(H * 0.18);
             // scale image to canvas width while preserving aspect ratio
-            const scale = canvas.width / imgW;
+            const scale = W / imgW;
             const drawH = imgH * scale;
             // subtle vertical sway based on time (slow sine) — amplitude is small and scales with canvas height
             const t = Date.now() / 1000; // seconds
-            const amp = Math.max(3, Math.min(10, canvas.height * 0.008));
+            const amp = Math.max(3, Math.min(10, H * 0.008));
             const sway = Math.sin(t * 0.6) * amp; // slow gentle motion
-            const drawY = canvas.height - drawH + sway;
-            try { ctx.drawImage(coralsImg, 0, drawY, canvas.width, drawH); } catch (e) { /* ignore draw errors */ }
+            const drawY = H - drawH + sway;
+            try { ctx.drawImage(coralsImg, 0, drawY, W, drawH); } catch (e) { /* ignore draw errors */ }
         } else {
             // fallback: just draw fish (no procedural corals available)
             updateFish();
@@ -671,7 +703,7 @@ function drawEntities() {
     // draw names beneath each whale (if present)
     (function drawNames() {
         // Slightly smaller, responsive font so labels are unobtrusive on all sizes
-        const fontSize = Math.max(10, Math.round(canvas.width * 0.014));
+    const fontSize = Math.max(10, Math.round(W * 0.014));
         ctx.save();
         ctx.font = `${fontSize}px system-ui, sans-serif`;
         ctx.textAlign = 'center';
@@ -684,7 +716,7 @@ function drawEntities() {
         if (whale1 && whale1.name) {
             const yOff = (whale1.size || 40) * 0.9;
             const x = whale1.x;
-            const y = Math.min(canvas.height - 8, whale1.y + yOff);
+            const y = Math.min(H - 8, whale1.y + yOff);
             ctx.strokeText(whale1.name, x, y);
             ctx.fillText(whale1.name, x, y);
         }
@@ -692,7 +724,7 @@ function drawEntities() {
         if (whale2 && whale2.name) {
             const yOff = (whale2.size || 40) * 0.9;
             const x = whale2.x;
-            const y = Math.min(canvas.height - 8, whale2.y + yOff);
+            const y = Math.min(H - 8, whale2.y + yOff);
             ctx.strokeText(whale2.name, x, y);
             ctx.fillText(whale2.name, x, y);
         }
@@ -700,7 +732,7 @@ function drawEntities() {
         if (baby && baby.name) {
             const yOff = (baby.size || 30) * 0.9;
             const x = baby.x;
-            const y = Math.min(canvas.height - 8, baby.y + yOff);
+            const y = Math.min(H - 8, baby.y + yOff);
             ctx.globalAlpha = Math.min(1, baby.life * 1.3);
             ctx.strokeText(baby.name, x, y);
             ctx.fillText(baby.name, x, y);
@@ -736,15 +768,15 @@ function drawEntities() {
             if (elapsed < fadeIn) alpha = elapsed / fadeIn;
             else if (elapsed > splashBubble.duration - fadeOut) alpha = Math.max(0, (splashBubble.duration - elapsed) / fadeOut);
 
-        // where to place the bubble: above and slightly right of whale2
-        const x = whale2.x + Math.min(whale2.size * 0.8, 48);
-        // make the bubble noticeably narrower on most screens
-        const maxW = Math.min(180, canvas.width * 0.28);
+    // where to place the bubble: above and slightly right of whale2
+    const x = whale2.x + Math.min(whale2.size * 0.8, 48);
+    // make the bubble noticeably narrower on most screens
+    const maxW = Math.min(180, W * 0.28);
             ctx.save();
             ctx.globalAlpha = alpha;
 
             // prepare text wrap and respect explicit newlines
-            ctx.font = `${Math.max(12, Math.round(canvas.width * 0.012))}px system-ui, sans-serif`;
+            ctx.font = `${Math.max(12, Math.round(W * 0.012))}px system-ui, sans-serif`;
             const paragraphs = splashBubble.text.split('\n');
             const lines = [];
             for (const p of paragraphs) {
@@ -769,7 +801,7 @@ function drawEntities() {
             const bH = lines.length * lineHeight + padding * 2;
             let bX = x;
             // avoid overflowing right edge
-            if (bX + bW > canvas.width - 8) bX = canvas.width - bW - 8;
+            if (bX + bW > W - 8) bX = W - bW - 8;
             let bY = Math.max(8, whale2.y - whale2.size - bH - 8);
 
             // rounded rect with tail pointing to whale
@@ -951,9 +983,9 @@ function drawKikiBubble() {
 
     // anchor above whale1
     const x = whale1.x + Math.min(whale1.size * 0.6, 32);
-    const maxW = Math.min(220, canvas.width * 0.32);
+    const maxW = Math.min(220, W * 0.32);
     ctx.save(); ctx.globalAlpha = alpha;
-    ctx.font = `${Math.max(12, Math.round(canvas.width * 0.012))}px system-ui, sans-serif`;
+    ctx.font = `${Math.max(12, Math.round(W * 0.012))}px system-ui, sans-serif`;
     const paragraphs = kikiBubble.text.split('\n');
     const lines = [];
     for (const p of paragraphs) {
@@ -971,7 +1003,7 @@ function drawKikiBubble() {
     const bW = Math.min(maxW, Math.max(80, Math.round(maxLineW))) + padding * 2;
     const bH = lines.length * lineHeight + padding * 2;
     let bX = x;
-    if (bX + bW > canvas.width - 8) bX = canvas.width - bW - 8;
+    if (bX + bW > W - 8) bX = W - bW - 8;
     let bY = Math.max(8, whale1.y - whale1.size - bH - 8);
 
     // draw rounded rect
@@ -1017,9 +1049,9 @@ function drawSydneyBubble() {
     else if (elapsed > sydneyBubble.duration - fadeOut) alpha = Math.max(0, (sydneyBubble.duration - elapsed) / fadeOut);
 
     const x = whale1.x + Math.min(whale1.size * 0.6, 32);
-    const maxW = Math.min(220, canvas.width * 0.32);
+    const maxW = Math.min(220, W * 0.32);
     ctx.save(); ctx.globalAlpha = alpha;
-    ctx.font = `${Math.max(12, Math.round(canvas.width * 0.012))}px system-ui, sans-serif`;
+    ctx.font = `${Math.max(12, Math.round(W * 0.012))}px system-ui, sans-serif`;
     const text = sydneyBubble.text;
     const textW = ctx.measureText(text).width;
     const padding = 8;
@@ -1027,7 +1059,7 @@ function drawSydneyBubble() {
     const lineHeight = Math.ceil(parseInt(ctx.font,10) * 1.05);
     const bH = lineHeight + padding * 2;
     let bX = x;
-    if (bX + bW > canvas.width - 8) bX = canvas.width - bW - 8;
+    if (bX + bW > W - 8) bX = W - bW - 8;
     let bY = Math.max(8, whale1.y - whale1.size - bH - 8);
 
     // rounded rect
@@ -1062,9 +1094,9 @@ function drawSplashSydneyBubble() {
     else if (elapsed > splashSydneyBubble.duration - fadeOut) alpha = Math.max(0, (splashSydneyBubble.duration - elapsed) / fadeOut);
 
     const x = whale2.x + Math.min(whale2.size * 0.6, 32);
-    const maxW = Math.min(220, canvas.width * 0.32);
+    const maxW = Math.min(220, W * 0.32);
     ctx.save(); ctx.globalAlpha = alpha;
-    ctx.font = `${Math.max(12, Math.round(canvas.width * 0.012))}px system-ui, sans-serif`;
+    ctx.font = `${Math.max(12, Math.round(W * 0.012))}px system-ui, sans-serif`;
     const text = splashSydneyBubble.text;
     const textW = ctx.measureText(text).width;
     const padding = 8;
@@ -1072,7 +1104,7 @@ function drawSplashSydneyBubble() {
     const lineHeight = Math.ceil(parseInt(ctx.font,10) * 1.05);
     const bH = lineHeight + padding * 2;
     let bX = x;
-    if (bX + bW > canvas.width - 8) bX = canvas.width - bW - 8;
+    if (bX + bW > W - 8) bX = W - bW - 8;
     let bY = Math.max(8, whale2.y - whale2.size - bH - 8);
 
     const radius = 8;
@@ -1119,9 +1151,9 @@ function drawWarmerBubble() {
     let alpha = Math.min(1, Math.max(0.15, elapsed / fadeIn));
 
     const x = whale1.x + Math.min(whale1.size * 0.6, 32);
-    const maxW = Math.min(260, canvas.width * 0.36);
+    const maxW = Math.min(260, W * 0.36);
     ctx.save(); ctx.globalAlpha = alpha;
-    ctx.font = `${Math.max(13, Math.round(canvas.width * 0.012))}px system-ui, sans-serif`;
+    ctx.font = `${Math.max(13, Math.round(W * 0.012))}px system-ui, sans-serif`;
     const text = warmerBubble.text;
     const textW = ctx.measureText(text).width;
     const padding = 8;
@@ -1129,7 +1161,7 @@ function drawWarmerBubble() {
     const lineHeight = Math.ceil(parseInt(ctx.font,10) * 1.05);
     const bH = lineHeight + padding * 2;
     let bX = x;
-    if (bX + bW > canvas.width - 8) bX = canvas.width - bW - 8;
+    if (bX + bW > W - 8) bX = W - bW - 8;
     let bY = Math.max(8, whale1.y - whale1.size - bH - 8);
 
     const radius = 8;
@@ -1168,9 +1200,9 @@ function drawSplashJumpBubble() {
     else if (elapsed > splashJumpBubble.duration - fadeOut) alpha = Math.max(0, (splashJumpBubble.duration - elapsed) / fadeOut);
 
     const x = whale2.x + Math.min(whale2.size * 0.6, 32);
-    const maxW = Math.min(220, canvas.width * 0.32);
+    const maxW = Math.min(220, W * 0.32);
     ctx.save(); ctx.globalAlpha = alpha;
-    ctx.font = `${Math.max(12, Math.round(canvas.width * 0.012))}px system-ui, sans-serif`;
+    ctx.font = `${Math.max(12, Math.round(W * 0.012))}px system-ui, sans-serif`;
     const text = splashJumpBubble.text;
     const textW = ctx.measureText(text).width;
     const padding = 8;
@@ -1178,7 +1210,7 @@ function drawSplashJumpBubble() {
     const lineHeight = Math.ceil(parseInt(ctx.font,10) * 1.05);
     const bH = lineHeight + padding * 2;
     let bX = x;
-    if (bX + bW > canvas.width - 8) bX = canvas.width - bW - 8;
+    if (bX + bW > W - 8) bX = W - bW - 8;
     let bY = Math.max(8, whale2.y - whale2.size - bH - 8);
 
     const radius = 8;
@@ -1209,9 +1241,9 @@ function drawBubblesSecondJumpBubble() {
     else if (elapsed > bubblesSecondJumpBubble.duration - fadeOut) alpha = Math.max(0, (bubblesSecondJumpBubble.duration - elapsed) / fadeOut);
 
     const x = whale1.x + Math.min(whale1.size * 0.6, 32);
-    const maxW = Math.min(220, canvas.width * 0.32);
+    const maxW = Math.min(220, W * 0.32);
     ctx.save(); ctx.globalAlpha = alpha;
-    ctx.font = `${Math.max(12, Math.round(canvas.width * 0.012))}px system-ui, sans-serif`;
+    ctx.font = `${Math.max(12, Math.round(W * 0.012))}px system-ui, sans-serif`;
     const text = bubblesSecondJumpBubble.text;
     const textW = ctx.measureText(text).width;
     const padding = 8;
@@ -1219,7 +1251,7 @@ function drawBubblesSecondJumpBubble() {
     const lineHeight = Math.ceil(parseInt(ctx.font,10) * 1.05);
     const bH = lineHeight + padding * 2;
     let bX = x;
-    if (bX + bW > canvas.width - 8) bX = canvas.width - bW - 8;
+    if (bX + bW > W - 8) bX = W - bW - 8;
     let bY = Math.max(8, whale1.y - whale1.size - bH - 8);
 
     const radius = 8;
@@ -1250,9 +1282,9 @@ function drawBubblesFourthJumpBubble() {
     else if (elapsed > bubblesFourthJumpBubble.duration - fadeOut) alpha = Math.max(0, (bubblesFourthJumpBubble.duration - elapsed) / fadeOut);
 
     const x = whale1.x + Math.min(whale1.size * 0.6, 32);
-    const maxW = Math.min(220, canvas.width * 0.32);
+    const maxW = Math.min(220, W * 0.32);
     ctx.save(); ctx.globalAlpha = alpha;
-    ctx.font = `${Math.max(12, Math.round(canvas.width * 0.012))}px system-ui, sans-serif`;
+    ctx.font = `${Math.max(12, Math.round(W * 0.012))}px system-ui, sans-serif`;
     const text = bubblesFourthJumpBubble.text;
     const textW = ctx.measureText(text).width;
     const padding = 8;
@@ -1260,7 +1292,7 @@ function drawBubblesFourthJumpBubble() {
     const lineHeight = Math.ceil(parseInt(ctx.font,10) * 1.05);
     const bH = lineHeight + padding * 2;
     let bX = x;
-    if (bX + bW > canvas.width - 8) bX = canvas.width - bW - 8;
+    if (bX + bW > W - 8) bX = W - bW - 8;
     let bY = Math.max(8, whale1.y - whale1.size - bH - 8);
 
     const radius = 8;
@@ -1299,9 +1331,9 @@ function drawSplashThirdJumpBubble() {
     else if (elapsed > splashThirdJumpBubble.duration - fadeOut) alpha = Math.max(0, (splashThirdJumpBubble.duration - elapsed) / fadeOut);
 
     const x = whale2.x + Math.min(whale2.size * 0.6, 32);
-    const maxW = Math.min(220, canvas.width * 0.32);
+    const maxW = Math.min(220, W * 0.32);
     ctx.save(); ctx.globalAlpha = alpha;
-    ctx.font = `${Math.max(12, Math.round(canvas.width * 0.012))}px system-ui, sans-serif`;
+    ctx.font = `${Math.max(12, Math.round(W * 0.012))}px system-ui, sans-serif`;
     const text = splashThirdJumpBubble.text;
     const textW = ctx.measureText(text).width;
     const padding = 8;
@@ -1309,7 +1341,7 @@ function drawSplashThirdJumpBubble() {
     const lineHeight = Math.ceil(parseInt(ctx.font,10) * 1.05);
     const bH = lineHeight + padding * 2;
     let bX = x;
-    if (bX + bW > canvas.width - 8) bX = canvas.width - bW - 8;
+    if (bX + bW > W - 8) bX = W - bW - 8;
     let bY = Math.max(8, whale2.y - whale2.size - bH - 8);
 
     const radius = 8;
@@ -1347,18 +1379,18 @@ function drawSplashAfterBothFiveBubble() {
 
     const x = whale2.x + Math.min(whale2.size * 0.6, 32);
     ctx.save(); ctx.globalAlpha = alpha;
-    ctx.font = `${Math.max(14, Math.round(canvas.width * 0.013))}px system-ui, sans-serif`;
+    ctx.font = `${Math.max(14, Math.round(W * 0.013))}px system-ui, sans-serif`;
     const text = splashAfterBothFiveBubble.text;
     const textW = ctx.measureText(text).width;
     const padding = 10;
     // Prefer a width that fits the text plus padding, but don't exceed the canvas width
-    const availableW = Math.max(120, canvas.width - 16);
+    const availableW = Math.max(120, W - 16);
     const desiredW = Math.round(textW) + padding * 2 + 20; // extra breathing room
     const bW = Math.min(availableW, Math.max(desiredW, 100));
     const lineHeight = Math.ceil(parseInt(ctx.font,10) * 1.2);
     const bH = lineHeight + padding * 2;
     let bX = x;
-    if (bX + bW > canvas.width - 8) bX = canvas.width - bW - 8;
+    if (bX + bW > W - 8) bX = W - bW - 8;
     let bY = Math.max(8, whale2.y - whale2.size - bH - 8);
 
     const radius = 10;
@@ -1394,9 +1426,9 @@ function drawSplashBabyBubble() {
     if (elapsed < fadeIn) alpha = elapsed / fadeIn;
     else if (elapsed > splashBabyBubble.duration - fadeOut) alpha = Math.max(0, (splashBabyBubble.duration - elapsed) / fadeOut);
     const x = whale2.x + Math.min(whale2.size * 0.6, 32);
-    const maxW = Math.min(220, canvas.width * 0.32);
+    const maxW = Math.min(220, W * 0.32);
     ctx.save(); ctx.globalAlpha = alpha;
-    ctx.font = `${Math.max(12, Math.round(canvas.width * 0.012))}px system-ui, sans-serif`;
+    ctx.font = `${Math.max(12, Math.round(W * 0.012))}px system-ui, sans-serif`;
     const text = splashBabyBubble.text;
     const textW = ctx.measureText(text).width;
     const padding = 8;
@@ -1404,7 +1436,7 @@ function drawSplashBabyBubble() {
     const lineHeight = Math.ceil(parseInt(ctx.font,10) * 1.05);
     const bH = lineHeight + padding * 2;
     let bX = x;
-    if (bX + bW > canvas.width - 8) bX = canvas.width - bW - 8;
+    if (bX + bW > W - 8) bX = W - bW - 8;
     let bY = Math.max(8, whale2.y - whale2.size - bH - 8);
     const radius = 8;
     ctx.fillStyle = 'rgba(255,255,255,0.98)';
@@ -1438,9 +1470,9 @@ function drawBubblesBabyBubble() {
     if (elapsed < fadeIn) alpha = elapsed / fadeIn;
     else if (elapsed > bubblesBabyBubble.duration - fadeOut) alpha = Math.max(0, (bubblesBabyBubble.duration - elapsed) / fadeOut);
     const x = whale1.x + Math.min(whale1.size * 0.6, 32);
-    const maxW = Math.min(220, canvas.width * 0.32);
+    const maxW = Math.min(220, W * 0.32);
     ctx.save(); ctx.globalAlpha = alpha;
-    ctx.font = `${Math.max(12, Math.round(canvas.width * 0.012))}px system-ui, sans-serif`;
+    ctx.font = `${Math.max(12, Math.round(W * 0.012))}px system-ui, sans-serif`;
     const text = bubblesBabyBubble.text;
     const textW = ctx.measureText(text).width;
     const padding = 8;
@@ -1448,7 +1480,7 @@ function drawBubblesBabyBubble() {
     const lineHeight = Math.ceil(parseInt(ctx.font,10) * 1.05);
     const bH = lineHeight + padding * 2;
     let bX = x;
-    if (bX + bW > canvas.width - 8) bX = canvas.width - bW - 8;
+    if (bX + bW > W - 8) bX = W - bW - 8;
     let bY = Math.max(8, whale1.y - whale1.size - bH - 8);
     const radius = 8;
     ctx.fillStyle = 'rgba(255,255,255,0.98)';
@@ -1482,9 +1514,9 @@ function drawFinalBubblesBubble() {
     if (elapsed < fadeIn) alpha = elapsed / fadeIn;
     else if (elapsed > finalBubblesBubble.duration - fadeOut) alpha = Math.max(0, (finalBubblesBubble.duration - elapsed) / fadeOut);
     const x = whale1.x + Math.min(whale1.size * 0.6, 32);
-    const maxW = Math.min(260, canvas.width * 0.36);
+    const maxW = Math.min(260, W * 0.36);
     ctx.save(); ctx.globalAlpha = alpha;
-    ctx.font = `${Math.max(12, Math.round(canvas.width * 0.012))}px system-ui, sans-serif`;
+    ctx.font = `${Math.max(12, Math.round(W * 0.012))}px system-ui, sans-serif`;
     const text = finalBubblesBubble.text;
     const textW = ctx.measureText(text).width;
     const padding = 8;
@@ -1492,7 +1524,7 @@ function drawFinalBubblesBubble() {
     const lineHeight = Math.ceil(parseInt(ctx.font,10) * 1.05);
     const bH = lineHeight + padding * 2;
     let bX = x;
-    if (bX + bW > canvas.width - 8) bX = canvas.width - bW - 8;
+    if (bX + bW > W - 8) bX = W - bW - 8;
     let bY = Math.max(8, whale1.y - whale1.size - bH - 8);
     const radius = 8;
     ctx.fillStyle = 'rgba(255,255,255,0.98)';
@@ -1520,15 +1552,25 @@ function drawFinalSplashBubble() {
     }
     if (!finalSplashBubble.active) return;
     const elapsed = now - finalSplashBubble.startTime;
-    if (elapsed > finalSplashBubble.duration) { finalSplashBubble.active = false; return; }
+    if (elapsed > finalSplashBubble.duration) {
+        finalSplashBubble.active = false;
+        // Trigger end sequence (camera ease, whale song, gradient) once
+        try {
+            if (!endSequenceTriggered) {
+                endSequenceTriggered = true;
+                startEndSequence();
+            }
+        } catch (e) {}
+        return;
+    }
     const fadeIn = 120, fadeOut = 160;
     let alpha = 1;
     if (elapsed < fadeIn) alpha = elapsed / fadeIn;
     else if (elapsed > finalSplashBubble.duration - fadeOut) alpha = Math.max(0, (finalSplashBubble.duration - elapsed) / fadeOut);
     const x = whale2.x + Math.min(whale2.size * 0.6, 32);
-    const maxW = Math.min(260, canvas.width * 0.36);
+    const maxW = Math.min(260, W * 0.36);
     ctx.save(); ctx.globalAlpha = alpha;
-    ctx.font = `${Math.max(12, Math.round(canvas.width * 0.012))}px system-ui, sans-serif`;
+    ctx.font = `${Math.max(12, Math.round(W * 0.012))}px system-ui, sans-serif`;
     const text = finalSplashBubble.text;
     const textW = ctx.measureText(text).width;
     const padding = 8;
@@ -1536,7 +1578,7 @@ function drawFinalSplashBubble() {
     const lineHeight = Math.ceil(parseInt(ctx.font,10) * 1.05);
     const bH = lineHeight + padding * 2;
     let bX = x;
-    if (bX + bW > canvas.width - 8) bX = canvas.width - bW - 8;
+    if (bX + bW > W - 8) bX = W - bW - 8;
     let bY = Math.max(8, whale2.y - whale2.size - bH - 8);
     const radius = 8;
     ctx.fillStyle = 'rgba(255,255,255,0.98)';
@@ -1578,6 +1620,156 @@ function drawBubbleFlourishes() {
     }
 }
 
+// Draw a moving soft gradient overlay (used for the end-of-sequence screen)
+function drawGradientOverlay(blend) {
+    if (!gradientTransition || !gradientTransition.active) return;
+    const now = Date.now();
+    const w = W, h = H;
+
+    // blend: when provided, use it (0..1). Otherwise fall back to automatic timing
+    let alpha = gradientTransition.intensity;
+    if (typeof blend === 'number') {
+        alpha = gradientTransition.intensity * Math.max(0, Math.min(1, blend));
+    } else {
+        const t = Math.max(0, now - gradientTransition.startTime);
+        const fadeIn = Math.min(1500, gradientTransition.crossfadeDuration);
+        if (t < fadeIn) alpha = gradientTransition.intensity * (t / fadeIn);
+    }
+
+    // base vertical gradient (full-screen background)
+    const baseShift = Math.sin((now / 1000) * (gradientTransition.speed * 0.4)) * 40;
+    const base = ctx.createLinearGradient(0, 0 + baseShift, 0, h + baseShift);
+    base.addColorStop(0, '#37beefff');
+    base.addColorStop(0.3, '#d7f3ff');
+    base.addColorStop(0.6, '#13a387ff');
+    base.addColorStop(1, '#1f7fb0');
+
+    // To guarantee full coverage even with any transforms, draw the gradient
+    // and blobs into an offscreen canvas slightly larger than the viewport,
+    // then blit it centered onto the main canvas.
+    const margin = 0.18; // 18% extra on each dimension
+    const offW = Math.ceil(w * (1 + margin));
+    const offH = Math.ceil(h * (1 + margin));
+    const off = document.createElement('canvas');
+    off.width = offW; off.height = offH;
+    const octx = off.getContext('2d');
+
+    // base gradient on offscreen
+    const baseShiftOff = Math.sin((now / 1000) * (gradientTransition.speed * 0.4)) * 40;
+    const baseOff = octx.createLinearGradient(0, 0 + baseShiftOff, 0, offH + baseShiftOff);
+    // gently animate the gradient colors over time by shifting a hue base
+    const hueBase = 195 + Math.sin(now / 8000) * 18; // slow oscillation
+    baseOff.addColorStop(0, `hsla(${Math.round(hueBase)}, 85%, 55%, 1)`);
+    baseOff.addColorStop(0.3, `hsla(${Math.round(hueBase + 18)}, 95%, 96%, 1)`);
+    baseOff.addColorStop(0.6, `hsla(${Math.round(hueBase - 24)}, 60%, 40%, 1)`);
+    baseOff.addColorStop(1, `hsla(${Math.round(hueBase - 6)}, 55%, 35%, 1)`);
+    octx.fillStyle = baseOff;
+    octx.fillRect(0, 0, offW, offH);
+
+    // blobs on offscreen
+    const blobCount = 9;
+    // compute per-blob gentle color variations from the hue base
+    function blobColor(i, a) {
+        const h = Math.round(hueBase + (i - blobCount/2) * 6 + Math.sin(now/1300 + i) * 6);
+        const s = 85 - Math.abs(i - blobCount/2) * 3;
+        const l = 92 - Math.abs(i - blobCount/2) * 6;
+        return `hsla(${h}, ${s}%, ${l}%, ${a})`;
+    }
+    const globalDriftX = Math.sin(now / 4500) * (offW * 0.02);
+    const globalDriftY = Math.cos(now / 5200) * (offH * 0.02);
+    for (let i = 0; i < blobCount; i++) {
+        const speed = 0.08 + (i * 0.02);
+        const phase = (now / 1000) * (speed) + (i * 0.9);
+        const bx = 0.12 + 0.76 * ((i * 1.37) % blobCount) / blobCount;
+        const by = 0.18 + 0.64 * ((blobCount - i) / blobCount);
+
+        const cxB = bx * offW + globalDriftX + Math.cos(phase * (0.6 + i * 0.07)) * (offW * (0.06 + i * 0.01));
+        const cyB = by * offH + globalDriftY + Math.sin(phase * (0.7 + i * 0.06)) * (offH * (0.05 + i * 0.008));
+
+        const radius = Math.max(120, Math.min(offW * 0.55, 520)) * (0.85 + 0.35 * Math.sin(phase * (0.9 + i * 0.03)));
+        const g2 = octx.createRadialGradient(cxB, cyB, Math.max(8, radius * 0.02), cxB, cyB, radius);
+    g2.addColorStop(0, blobColor(i, 0.30));
+    g2.addColorStop(0.45, blobColor(i, 0.10));
+        g2.addColorStop(1, 'rgba(6,30,60,0)');
+        octx.globalCompositeOperation = 'lighter';
+        octx.fillStyle = g2;
+        octx.beginPath(); octx.arc(cxB, cyB, radius, 0, Math.PI * 2); octx.fill();
+    }
+
+    // blit offscreen to main canvas centered, using alpha blend
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, Math.min(alpha, 1));
+    const dx = -Math.round((offW - w) / 2);
+    const dy = -Math.round((offH - h) / 2);
+    ctx.drawImage(off, dx, dy, offW, offH);
+    ctx.restore();
+
+    // draw centered typewriter text on top of the gradient if configured
+    try {
+        if (gradientTransition && gradientTransition.typeStarted) {
+            const txt = (typeof gradientTransition.text === 'string') ? gradientTransition.text : 'Thank you for playing with the whales :)';
+            const t0 = gradientTransition.typeStartTime || gradientTransition.startTime || now;
+            // do not render any text until the scheduled typeStartTime
+            if (now >= t0) {
+                const elapsedType = now - t0;
+                const chars = Math.min(txt.length, Math.floor(elapsedType / Math.max(1, gradientTransition.typingSpeed || 55)));
+                let toShow = txt.slice(0, chars);
+                // blinking cursor while typing (only once typing has started)
+                if (chars < txt.length) {
+                    const blink = Math.floor(now / 400) % 2 === 0 ? '|' : ' ';
+                    toShow = toShow + blink;
+                }
+
+                const fontSize = Math.max(14, Math.round(W * 0.036));
+                ctx.save();
+                ctx.font = `${fontSize}px system-ui, sans-serif`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                // use requested text color and remove shadow for a clean look
+                ctx.fillStyle = '#1f7fb0';
+                // place text at the visual center of the canvas
+                const y = Math.round(H / 2);
+                // respect overall overlay alpha so text fades with the gradient
+                ctx.globalAlpha = Math.max(0, Math.min(alpha, 1));
+                ctx.fillText(toShow, Math.round(W / 2), y);
+                ctx.restore();
+            }
+        }
+    } catch (e) { /* non-fatal drawing error */ }
+}
+
+// (audio removed) end-of-sequence includes only camera ease and gradient overlay
+
+// Kick off the end-of-sequence effects: camera zoom-out, gradient, and whale song
+function startEndSequence() {
+    try {
+        cameraEase.active = true; cameraEase.startTime = Date.now(); currentCameraScale = cameraEase.from;
+        gradientTransition.active = true; gradientTransition.startTime = Date.now(); gradientTransition.finished = false;
+        // kick off typewriter text at the same time as the gradient
+        // schedule typewriter to begin 2000ms after the gradient appears
+        gradientTransition.typeStartTime = Date.now() + 2000;
+        gradientTransition.typeStarted = true;
+    } catch (e) {}
+}
+
+// Apply camera transform (scale about canvas center) if cameraEase is active
+function applyCameraTransform() {
+    const now = Date.now();
+    if (!cameraEase || (!cameraEase.active && currentCameraScale === 1)) return false;
+    const t = Math.min(1, (now - cameraEase.startTime) / Math.max(1, cameraEase.duration));
+    // ease-out cubic
+    const p = 1 - Math.pow(1 - t, 3);
+    currentCameraScale = cameraEase.from + (cameraEase.to - cameraEase.from) * p;
+    // once finished, keep final scale but mark inactive
+    if (t >= 1) { cameraEase.active = false; }
+    const cx = W / 2, cy = H / 2;
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.scale(currentCameraScale, currentCameraScale);
+    ctx.translate(-cx, -cy);
+    return true;
+}
+
 // draw a single-line typewriter banner in the sky after a calf is born
 function drawSkyBanner() {
     if (!skyBanner || !skyBanner.active || !skyBanner.shown) return;
@@ -1588,14 +1780,14 @@ function drawSkyBanner() {
     // number of characters to show based on typingSpeed
     const chars = Math.min(total, Math.floor(elapsed / Math.max(1, skyBanner.typingSpeed)));
     let toShow = skyBanner.text.slice(0, chars);
-    const fontSize = Math.max(16, Math.round(canvas.width * 0.02));
+    const fontSize = Math.max(16, Math.round(W * 0.02));
     ctx.save();
     ctx.font = `${fontSize}px system-ui, sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     // sky area: vertically place at roughly 35% of seaLevel (above the horizon), moved slightly down
     const y = Math.max(28, seaLevel * 0.35) + 20;
-    const x = canvas.width / 2;
+    const x = W / 2;
     // add a blinking cursor while typing
     if (chars < total) {
         const blink = Math.floor(now / 400) % 2 === 0 ? '|' : ' ';
@@ -1644,13 +1836,13 @@ function drawSkyBanner2() {
     const total = skyBanner2.text.length;
     const chars = Math.min(total, Math.floor(elapsed / Math.max(1, skyBanner2.typingSpeed)));
     let toShow = skyBanner2.text.slice(0, chars);
-    const fontSize = Math.max(16, Math.round(canvas.width * 0.02));
+    const fontSize = Math.max(16, Math.round(W * 0.02));
     ctx.save();
     ctx.font = `${fontSize}px system-ui, sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     const y = Math.max(28, seaLevel * 0.35) + 20;
-    const x = canvas.width / 2;
+    const x = W / 2;
     if (chars < total) {
         const blink = Math.floor(now / 400) % 2 === 0 ? '|' : ' ';
         toShow = toShow + blink;
@@ -1717,8 +1909,8 @@ function updateBaby() {
     baby.x += baby.vx; baby.y += baby.vy;
 
     if (baby.y < seaLevel + 20) baby.y = seaLevel + 20;
-    baby.y = Math.min(canvas.height - baby.size*1.6, baby.y);
-    baby.x = Math.max(-baby.size*3, Math.min(canvas.width + baby.size*3, baby.x));
+    baby.y = Math.min(H - baby.size*1.6, baby.y);
+    baby.x = Math.max(-baby.size*3, Math.min(W + baby.size*3, baby.x));
 
     baby.tail += 0.1; baby.life += 0.02;
 }
@@ -1744,11 +1936,15 @@ function checkScenarioAdvance() {
 }
 
 function loop(){
-    ctx.clearRect(0,0,canvas.width,canvas.height);
+    ctx.clearRect(0,0,W,H);
 
     if (!__loopStarted) { __loopStarted = true; try { console.debug && console.debug('game loop started'); } catch (e) {} }
 
     drawBackground();
+
+    // (no early-return here) continue with normal updates; gradient overlay
+    // will be drawn later in the loop to allow a smooth crossfade.
+
     // sky banners (typewriter) — first appears after calf birth, second is scheduled after the first
     try { drawSkyBanner(); } catch (e) {}
     try { drawSkyBanner2(); } catch (e) {}
@@ -1760,9 +1956,11 @@ function loop(){
         // krill handled inside drawEntities
     }
 
-    // Update whales movement
-    whale1.update();
-    whale2.update();
+    // Update whales movement (skip if final scene has frozen)
+    if (!endSceneFrozen) {
+        whale1.update();
+        whale2.update();
+    }
 
     if (scenario === 2 && !baby) {
         const d = Math.hypot(whale1.x-whale2.x, whale1.y-whale2.y);
@@ -1839,7 +2037,12 @@ function loop(){
         }
     } catch (e) {}
 
-    drawEntities();
+    // Apply camera transform if the end sequence requested a gentle zoom-out
+    let cameraPushed = false;
+    try { cameraPushed = applyCameraTransform(); } catch (e) { cameraPushed = false; }
+
+    // Draw entities (skip if final scene frozen)
+    if (!endSceneFrozen) drawEntities();
     // Draw canvas speech bubbles after entities so they overlay whales
     drawSpeechBubbles();
     // draw Bubbles/Kiki bubble after other bubbles so it overlays appropriately
@@ -1868,7 +2071,38 @@ function loop(){
     try { drawSplashAfterBothFiveBubble(); } catch (e) {}
     // small visual flourishes for bubble pops
     try { drawBubbleFlourishes(); } catch (e) {}
-    updateHUD(whale1, whale2, baby);
+
+    // If a gradient crossfade is active, compute progress and draw it on top
+    if (gradientTransition && gradientTransition.active) {
+        const now2 = Date.now();
+        const elapsed = Math.max(0, now2 - gradientTransition.startTime);
+        const dd = Math.max(1, gradientTransition.crossfadeDuration || 4000);
+        let p = Math.min(1, elapsed / dd);
+        // ease-out cubic for a smooth slow transition
+        const eased = 1 - Math.pow(1 - p, 3);
+        try { drawGradientOverlay(eased); } catch (e) {}
+        // fade DOM overlays gradually
+        const domOpacity = Math.max(0, 1 - eased);
+        try { const sb = document.getElementById('sky-background'); if (sb) sb.style.opacity = domOpacity; } catch (e) {}
+        try { const cnt = document.getElementById('counter'); if (cnt) cnt.style.opacity = domOpacity; } catch (e) {}
+        try { const ttl = document.getElementById('title'); if (ttl) ttl.style.opacity = domOpacity; } catch (e) {}
+        try { const overlay = document.getElementById('modal-overlay'); if (overlay) overlay.style.opacity = domOpacity; } catch (e) {}
+
+        // once fully transitioned, mark finished and remove DOM elements from layout
+        if (p >= 1 && !gradientTransition.finished) {
+            gradientTransition.finished = true; endSceneFrozen = true;
+            try { const sb = document.getElementById('sky-background'); if (sb) sb.style.display = 'none'; } catch (e) {}
+            try { const cnt = document.getElementById('counter'); if (cnt) cnt.style.display = 'none'; } catch (e) {}
+            try { const ttl = document.getElementById('title'); if (ttl) ttl.style.display = 'none'; } catch (e) {}
+            try { const overlay = document.getElementById('modal-overlay'); if (overlay) overlay.style.display = 'none'; } catch (e) {}
+        }
+    }
+
+    // restore camera transform (if applied) before drawing HUD/DOM overlays
+    try { if (cameraPushed) ctx.restore(); } catch (e) {}
+
+    // If end scene has frozen, skip HUD updates; otherwise update normally
+    if (!endSceneFrozen) updateHUD(whale1, whale2, baby);
 
     if (missionReady) {
         // If we're in the final (warmer) scenario and a baby exists, do not show

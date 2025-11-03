@@ -1,4 +1,5 @@
 import { canvas, ctx, seaLevel } from '../utils/canvas.js';
+import { W, H } from '../utils/canvas.js';
 
 // krill particles (flat array) and swarm centers
 export let krill = [];
@@ -15,11 +16,11 @@ export function spawnKrill(swarmCount = 9, perSwarm = 8) {
     if (!swarmCount || swarmCount <= 0) return;
 
     const minY = seaLevel + 60; // keep swarms a comfortable distance below the surface
-    const maxYRange = Math.max(40, canvas.height - seaLevel - 160);
+    const maxYRange = Math.max(40, H - seaLevel - 160);
     for (let s = 0; s < swarmCount; s++) {
         // swarm centers are nearly stationary to avoid sweeping across the scene
         swarms.push({
-            x: Math.random() * canvas.width,
+            x: Math.random() * W,
             y: minY + Math.random() * maxYRange,
             vx: (Math.random() * 0.02) - 0.01, // tiny jitter only
             vy: Math.sin(Math.random() * Math.PI * 2) * 0.02,
@@ -63,9 +64,9 @@ export function addSwarms(count = 1, perSwarm = 8) {
     for (let s = 0; s < count; s++) {
         const cid = start + s;
         const minY = seaLevel + 60;
-        const maxYRange = Math.max(40, canvas.height - seaLevel - 160);
+    const maxYRange = Math.max(40, H - seaLevel - 160);
         const center = {
-            x: Math.random() * canvas.width,
+            x: Math.random() * W,
             y: minY + Math.random() * maxYRange,
             vx: (Math.random() * 0.02) - 0.01,
             vy: Math.sin(Math.random() * Math.PI * 2) * 0.02,
@@ -121,7 +122,7 @@ export function updateKrill() {
         // clamp to canvas, keep a small margin
         const margin = 20;
         if (s.x < margin) s.x = margin;
-        if (s.x > canvas.width - margin) s.x = canvas.width - margin;
+    if (s.x > W - margin) s.x = W - margin;
         if (s.glowTimer > 0) s.glowTimer = Math.max(0, s.glowTimer - 16);
         // damp any velocity to avoid buildup
         s.vx *= 0.98;
@@ -141,7 +142,7 @@ export function updateKrill() {
                 // clamp inside canvas
                 const pad = 6;
                 if (k.x < pad) k.x = pad;
-                if (k.x > canvas.width - pad) k.x = canvas.width - pad;
+                if (k.x > W - pad) k.x = W - pad;
             } else {
                 // finished settling
                 k.settling = false;
@@ -157,7 +158,7 @@ export function updateKrill() {
                 // clamp inside canvas
                 const pad = 6;
                 if (k.x < pad) k.x = pad;
-                if (k.x > canvas.width - pad) k.x = canvas.width - pad;
+                if (k.x > W - pad) k.x = W - pad;
             }
         }
     }
