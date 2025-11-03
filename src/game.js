@@ -36,7 +36,103 @@ let kikiBubble = {
     triggeredByWhale2: false
 };
 
+// Sydney bubble for Bubbles (whale1) shown after Sydney modal is dismissed
+let sydneyBubble = {
+    text: "Let's jump together!",
+    shown: false,
+    active: false,
+    startTime: 0,
+    duration: 3000
+};
+
+// Splash (whale2) reaction bubble in Sydney triggered after Bubbles (whale1) does 1 jump
+let splashSydneyBubble = {
+    text: 'That was a mighty breach!',
+    shown: false,
+    active: false,
+    startTime: 0,
+    duration: 3000,
+    triggered: false
+};
+
+// Splash's own jump-exultation bubble (any scenario) - triggers when Splash (whale2) does first jump
+let splashJumpBubble = {
+    text: 'Woohoo!',
+    shown: false,
+    active: false,
+    startTime: 0,
+    duration: 2000,
+    triggered: false
+};
+
+// Bubbles (whale1) second-jump bubble: triggers when whale1 has done 2 jumps
+let bubblesSecondJumpBubble = {
+    text: 'Big and brave!',
+    shown: false,
+    active: false,
+    startTime: 0,
+    duration: 2000,
+    triggered: false
+};
+
+// Splash's third-jump delayed bubble: appears 2s after Splash (whale2) does 3 jumps
+let splashThirdJumpBubble = {
+    text: 'Again!!!!',
+    shown: false,
+    active: false,
+    startTime: 0,
+    scheduledAt: 0,
+    duration: 2000,
+    triggered: false
+};
+
+// Bubbles (whale1) fourth-jump bubble: appears immediately when whale1 has done 4 jumps
+let bubblesFourthJumpBubble = {
+    text: ' One more!!!',
+    shown: false,
+    active: false,
+    startTime: 0,
+    duration: 2000,
+    triggered: false
+};
+
+// Splash bubble that appears 1s after both whales have done 5 jumps; lasts 5s
+let splashAfterBothFiveBubble = {
+    text: 'We had a lot of fun! Now it’s time to travel north.',
+    shown: false,
+    active: false,
+    startTime: 0,
+    scheduledAt: 0,
+    duration: 5000,
+    triggered: false
+};
+
 let scenarioStartTime = Date.now();
+// Small flourish state (for bubble pop visuals)
+let bubbleFlourishes = [];
+
+// Play a short bubble/pop sound using WebAudio (one-shot)
+function playBubbleSound() {
+    try {
+        const C = window.AudioContext || window.webkitAudioContext;
+        if (!C) return;
+        const ctxAudio = new C();
+        const o = ctxAudio.createOscillator();
+        const g = ctxAudio.createGain();
+        o.type = 'sine';
+        o.frequency.value = 520;
+        g.gain.value = 0.001;
+        o.connect(g); g.connect(ctxAudio.destination);
+        const now = ctxAudio.currentTime;
+        g.gain.setValueAtTime(0.0001, now);
+        g.gain.exponentialRampToValueAtTime(0.06, now + 0.01);
+        g.gain.exponentialRampToValueAtTime(0.0001, now + 0.18);
+        o.start(now);
+        o.stop(now + 0.2);
+        // close context after sound
+        setTimeout(() => { try { ctxAudio.close(); } catch (e) {} }, 400);
+    } catch (e) { /* ignore audio errors */ }
+}
 let loveParticles = [];
 // corals image (front layer for warmer waters)
 const coralsImg = new Image();
@@ -91,6 +187,18 @@ function initScenario(s) {
     kikiBubble.startTime = 0;
     kikiBubble.triggeredByWhale1 = false;
     kikiBubble.triggeredByWhale2 = false;
+    // reset Sydney bubble as well
+    sydneyBubble.shown = false;
+    sydneyBubble.active = false;
+    sydneyBubble.startTime = 0;
+
+    // reset additional bubbles
+    splashSydneyBubble.shown = false; splashSydneyBubble.active = false; splashSydneyBubble.startTime = 0; splashSydneyBubble.triggered = false;
+    splashJumpBubble.shown = false; splashJumpBubble.active = false; splashJumpBubble.startTime = 0; splashJumpBubble.triggered = false;
+    bubblesSecondJumpBubble.shown = false; bubblesSecondJumpBubble.active = false; bubblesSecondJumpBubble.startTime = 0; bubblesSecondJumpBubble.triggered = false;
+    splashThirdJumpBubble.shown = false; splashThirdJumpBubble.active = false; splashThirdJumpBubble.startTime = 0; splashThirdJumpBubble.scheduledAt = 0; splashThirdJumpBubble.triggered = false;
+    bubblesFourthJumpBubble.shown = false; bubblesFourthJumpBubble.active = false; bubblesFourthJumpBubble.startTime = 0; bubblesFourthJumpBubble.triggered = false;
+    splashAfterBothFiveBubble.shown = false; splashAfterBothFiveBubble.active = false; splashAfterBothFiveBubble.startTime = 0; splashAfterBothFiveBubble.scheduledAt = 0; splashAfterBothFiveBubble.triggered = false;
 
     // reset whale counters/state
     whale1.krillEaten = 0; whale1.jumpsDone = 0; whale1.joined = false;
@@ -136,14 +244,14 @@ function initScenario(s) {
 // Antarctica intro modal: appears when entering scenario 0 and blocks krill-eating
 function createAntarcticaModal() {
     if (document.getElementById('antarctica-modal')) return;
-    // overlay behind the modal
-    let overlay = document.getElementById('antarctica-overlay');
+    // shared overlay behind modals
+    let overlay = document.getElementById('modal-overlay');
     if (!overlay) {
         overlay = document.createElement('div');
-        overlay.id = 'antarctica-overlay';
+        overlay.id = 'modal-overlay';
         Object.assign(overlay.style, {
             position: 'fixed', left: '0', top: '0', width: '100vw', height: '100vh',
-            background: 'rgba(0,0,0,0.6)', zIndex: 99990, display: 'none', pointerEvents: 'auto'
+            background: 'rgba(0,0,0,0.6)', zIndex: 100000, display: 'none', pointerEvents: 'auto'
         });
         document.body.appendChild(overlay);
     }
@@ -200,8 +308,8 @@ function showAntarcticaModal() {
     createAntarcticaModal();
     const modal = document.getElementById('antarctica-modal');
     if (!modal) return;
-    // show overlay first so modal is visually on top of it
-    const overlay = document.getElementById('antarctica-overlay');
+    // show shared overlay first so modal is visually on top of it
+    const overlay = document.getElementById('modal-overlay');
     if (overlay) overlay.style.display = 'block';
     modal.style.display = 'block';
     // set global flag so whales won't count krill
@@ -214,7 +322,7 @@ function hideAntarcticaModal() {
     if (!modal) return;
     modal.style.display = 'none';
     // hide overlay
-    const overlay = document.getElementById('antarctica-overlay');
+    const overlay = document.getElementById('modal-overlay');
     if (overlay) overlay.style.display = 'none';
     try { window.antarcticaDialogActive = false; } catch (e) {}
     // Activate the scheduled Splash bubble immediately when the modal is dismissed
@@ -223,6 +331,9 @@ function hideAntarcticaModal() {
             splashBubble.shown = true;
             splashBubble.active = true;
             splashBubble.startTime = Date.now();
+            // audio + visual flourish
+            playBubbleSound();
+            bubbleFlourishes.push({ x: whale2.x, y: whale2.y - (whale2.size || 40), t: Date.now() });
         }
     } catch (e) { /* ignore if splashBubble isn't defined */ }
     if (modal.__keyHandler) window.removeEventListener('keydown', modal.__keyHandler);
@@ -231,14 +342,14 @@ function hideAntarcticaModal() {
 // Sydney intro modal: appears when entering scenario 1 and blocks interactions until dismissed
 function createSydneyModal() {
     if (document.getElementById('sydney-modal')) return;
-    // overlay behind the modal
-    let overlay = document.getElementById('sydney-overlay');
+    // use shared overlay (created by Antarctica modal if present)
+    let overlay = document.getElementById('modal-overlay');
     if (!overlay) {
         overlay = document.createElement('div');
-        overlay.id = 'sydney-overlay';
+        overlay.id = 'modal-overlay';
         Object.assign(overlay.style, {
             position: 'fixed', left: '0', top: '0', width: '100vw', height: '100vh',
-            background: 'rgba(0,0,0,0.6)', zIndex: 99990, display: 'none'
+            background: 'rgba(0,0,0,0.6)', zIndex: 100000, display: 'none', pointerEvents: 'auto'
         });
         document.body.appendChild(overlay);
     }
@@ -278,7 +389,7 @@ function showSydneyModal() {
     createSydneyModal();
     const modal = document.getElementById('sydney-modal');
     if (!modal) return;
-    const overlay = document.getElementById('sydney-overlay');
+    const overlay = document.getElementById('modal-overlay');
     if (overlay) overlay.style.display = 'block';
     modal.style.display = 'block';
     try { window.modalDialogActive = true; window.sydneyDialogActive = true; } catch (e) {}
@@ -289,9 +400,20 @@ function hideSydneyModal() {
     const modal = document.getElementById('sydney-modal');
     if (!modal) return;
     modal.style.display = 'none';
-    const overlay = document.getElementById('sydney-overlay');
+    const overlay = document.getElementById('modal-overlay');
     if (overlay) overlay.style.display = 'none';
     try { window.modalDialogActive = false; window.sydneyDialogActive = false; } catch (e) {}
+    // Activate Bubbles (whale1) Sydney bubble when the modal is dismissed
+    try {
+        if (!sydneyBubble.shown) {
+            sydneyBubble.shown = true;
+            sydneyBubble.active = true;
+            sydneyBubble.startTime = Date.now();
+            // audio + visual flourish
+            playBubbleSound();
+            bubbleFlourishes.push({ x: whale1.x, y: whale1.y - (whale1.size || 40), t: Date.now() });
+        }
+    } catch (e) { /* ignore if sydneyBubble undefined */ }
     if (modal.__keyHandler) window.removeEventListener('keydown', modal.__keyHandler);
 }
 
@@ -689,6 +811,340 @@ function drawKikiBubble() {
     ctx.restore();
 }
 
+// draw Sydney bubble anchored to whale1 (Bubbles)
+function drawSydneyBubble() {
+    if (!sydneyBubble.active) return;
+    if (scenario !== 1) return; // only in Sydney
+    const now = Date.now();
+    const elapsed = now - sydneyBubble.startTime;
+    if (elapsed > sydneyBubble.duration) { sydneyBubble.active = false; return; }
+
+    const fadeIn = 200, fadeOut = 300;
+    let alpha = 1;
+    if (elapsed < fadeIn) alpha = elapsed / fadeIn;
+    else if (elapsed > sydneyBubble.duration - fadeOut) alpha = Math.max(0, (sydneyBubble.duration - elapsed) / fadeOut);
+
+    const x = whale1.x + Math.min(whale1.size * 0.6, 32);
+    const maxW = Math.min(220, canvas.width * 0.32);
+    ctx.save(); ctx.globalAlpha = alpha;
+    ctx.font = `${Math.max(12, Math.round(canvas.width * 0.012))}px system-ui, sans-serif`;
+    const text = sydneyBubble.text;
+    const textW = ctx.measureText(text).width;
+    const padding = 8;
+    const bW = Math.min(maxW, Math.max(80, Math.round(textW))) + padding * 2;
+    const lineHeight = Math.ceil(parseInt(ctx.font,10) * 1.05);
+    const bH = lineHeight + padding * 2;
+    let bX = x;
+    if (bX + bW > canvas.width - 8) bX = canvas.width - bW - 8;
+    let bY = Math.max(8, whale1.y - whale1.size - bH - 8);
+
+    // rounded rect
+    const radius = 8;
+    ctx.fillStyle = 'rgba(255,255,255,0.98)';
+    ctx.strokeStyle = 'rgba(0,0,0,0.28)'; ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(bX + radius, bY);
+    ctx.arcTo(bX + bW, bY, bX + bW, bY + bH, radius);
+    ctx.arcTo(bX + bW, bY + bH, bX, bY + bH, radius);
+    ctx.arcTo(bX, bY + bH, bX, bY, radius);
+    ctx.arcTo(bX, bY, bX + bW, bY, radius);
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+
+    // text
+    ctx.fillStyle = '#000'; ctx.textBaseline = 'top';
+    ctx.fillText(text, bX + padding, bY + padding);
+    ctx.restore();
+}
+
+// draw Splash's reaction bubble for Sydney (anchored to whale2)
+function drawSplashSydneyBubble() {
+    if (!splashSydneyBubble.active) return;
+    if (scenario !== 1) return;
+    const now = Date.now();
+    const elapsed = now - splashSydneyBubble.startTime;
+    if (elapsed > splashSydneyBubble.duration) { splashSydneyBubble.active = false; return; }
+
+    const fadeIn = 200, fadeOut = 300;
+    let alpha = 1;
+    if (elapsed < fadeIn) alpha = elapsed / fadeIn;
+    else if (elapsed > splashSydneyBubble.duration - fadeOut) alpha = Math.max(0, (splashSydneyBubble.duration - elapsed) / fadeOut);
+
+    const x = whale2.x + Math.min(whale2.size * 0.6, 32);
+    const maxW = Math.min(220, canvas.width * 0.32);
+    ctx.save(); ctx.globalAlpha = alpha;
+    ctx.font = `${Math.max(12, Math.round(canvas.width * 0.012))}px system-ui, sans-serif`;
+    const text = splashSydneyBubble.text;
+    const textW = ctx.measureText(text).width;
+    const padding = 8;
+    const bW = Math.min(maxW, Math.max(80, Math.round(textW))) + padding * 2;
+    const lineHeight = Math.ceil(parseInt(ctx.font,10) * 1.05);
+    const bH = lineHeight + padding * 2;
+    let bX = x;
+    if (bX + bW > canvas.width - 8) bX = canvas.width - bW - 8;
+    let bY = Math.max(8, whale2.y - whale2.size - bH - 8);
+
+    const radius = 8;
+    ctx.fillStyle = 'rgba(255,255,255,0.98)';
+    ctx.strokeStyle = 'rgba(0,0,0,0.28)'; ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(bX + radius, bY);
+    ctx.arcTo(bX + bW, bY, bX + bW, bY + bH, radius);
+    ctx.arcTo(bX + bW, bY + bH, bX, bY + bH, radius);
+    ctx.arcTo(bX, bY + bH, bX, bY, radius);
+    ctx.arcTo(bX, bY, bX + bW, bY, radius);
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+
+    ctx.fillStyle = '#000'; ctx.textBaseline = 'top';
+    ctx.fillText(text, bX + padding, bY + padding);
+    ctx.restore();
+}
+
+// draw Splash's short exultation bubble ("Woohoo!") anchored to whale2
+function drawSplashJumpBubble() {
+    if (!splashJumpBubble.active) return;
+    const now = Date.now();
+    const elapsed = now - splashJumpBubble.startTime;
+    if (elapsed > splashJumpBubble.duration) { splashJumpBubble.active = false; return; }
+    const fadeIn = 120, fadeOut = 160;
+    let alpha = 1;
+    if (elapsed < fadeIn) alpha = elapsed / fadeIn;
+    else if (elapsed > splashJumpBubble.duration - fadeOut) alpha = Math.max(0, (splashJumpBubble.duration - elapsed) / fadeOut);
+
+    const x = whale2.x + Math.min(whale2.size * 0.6, 32);
+    const maxW = Math.min(220, canvas.width * 0.32);
+    ctx.save(); ctx.globalAlpha = alpha;
+    ctx.font = `${Math.max(12, Math.round(canvas.width * 0.012))}px system-ui, sans-serif`;
+    const text = splashJumpBubble.text;
+    const textW = ctx.measureText(text).width;
+    const padding = 8;
+    const bW = Math.min(maxW, Math.max(60, Math.round(textW))) + padding * 2;
+    const lineHeight = Math.ceil(parseInt(ctx.font,10) * 1.05);
+    const bH = lineHeight + padding * 2;
+    let bX = x;
+    if (bX + bW > canvas.width - 8) bX = canvas.width - bW - 8;
+    let bY = Math.max(8, whale2.y - whale2.size - bH - 8);
+
+    const radius = 8;
+    ctx.fillStyle = 'rgba(255,255,255,0.98)';
+    ctx.strokeStyle = 'rgba(0,0,0,0.28)'; ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(bX + radius, bY);
+    ctx.arcTo(bX + bW, bY, bX + bW, bY + bH, radius);
+    ctx.arcTo(bX + bW, bY + bH, bX, bY + bH, radius);
+    ctx.arcTo(bX, bY + bH, bX, bY, radius);
+    ctx.arcTo(bX, bY, bX + bW, bY, radius);
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+
+    ctx.fillStyle = '#000'; ctx.textBaseline = 'top';
+    ctx.fillText(text, bX + padding, bY + padding);
+    ctx.restore();
+}
+
+// draw Bubbles' second-jump bubble ("Big and brave!") anchored to whale1
+function drawBubblesSecondJumpBubble() {
+    if (!bubblesSecondJumpBubble.active) return;
+    const now = Date.now();
+    const elapsed = now - bubblesSecondJumpBubble.startTime;
+    if (elapsed > bubblesSecondJumpBubble.duration) { bubblesSecondJumpBubble.active = false; return; }
+    const fadeIn = 120, fadeOut = 160;
+    let alpha = 1;
+    if (elapsed < fadeIn) alpha = elapsed / fadeIn;
+    else if (elapsed > bubblesSecondJumpBubble.duration - fadeOut) alpha = Math.max(0, (bubblesSecondJumpBubble.duration - elapsed) / fadeOut);
+
+    const x = whale1.x + Math.min(whale1.size * 0.6, 32);
+    const maxW = Math.min(220, canvas.width * 0.32);
+    ctx.save(); ctx.globalAlpha = alpha;
+    ctx.font = `${Math.max(12, Math.round(canvas.width * 0.012))}px system-ui, sans-serif`;
+    const text = bubblesSecondJumpBubble.text;
+    const textW = ctx.measureText(text).width;
+    const padding = 8;
+    const bW = Math.min(maxW, Math.max(60, Math.round(textW))) + padding * 2;
+    const lineHeight = Math.ceil(parseInt(ctx.font,10) * 1.05);
+    const bH = lineHeight + padding * 2;
+    let bX = x;
+    if (bX + bW > canvas.width - 8) bX = canvas.width - bW - 8;
+    let bY = Math.max(8, whale1.y - whale1.size - bH - 8);
+
+    const radius = 8;
+    ctx.fillStyle = 'rgba(255,255,255,0.98)';
+    ctx.strokeStyle = 'rgba(0,0,0,0.28)'; ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(bX + radius, bY);
+    ctx.arcTo(bX + bW, bY, bX + bW, bY + bH, radius);
+    ctx.arcTo(bX + bW, bY + bH, bX, bY + bH, radius);
+    ctx.arcTo(bX, bY + bH, bX, bY, radius);
+    ctx.arcTo(bX, bY, bX + bW, bY, radius);
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+
+    ctx.fillStyle = '#000'; ctx.textBaseline = 'top';
+    ctx.fillText(text, bX + padding, bY + padding);
+    ctx.restore();
+}
+
+// draw Bubbles' fourth-jump bubble (" One more!!!") anchored to whale1
+function drawBubblesFourthJumpBubble() {
+    if (!bubblesFourthJumpBubble.active) return;
+    const now = Date.now();
+    const elapsed = now - bubblesFourthJumpBubble.startTime;
+    if (elapsed > bubblesFourthJumpBubble.duration) { bubblesFourthJumpBubble.active = false; return; }
+    const fadeIn = 120, fadeOut = 160;
+    let alpha = 1;
+    if (elapsed < fadeIn) alpha = elapsed / fadeIn;
+    else if (elapsed > bubblesFourthJumpBubble.duration - fadeOut) alpha = Math.max(0, (bubblesFourthJumpBubble.duration - elapsed) / fadeOut);
+
+    const x = whale1.x + Math.min(whale1.size * 0.6, 32);
+    const maxW = Math.min(220, canvas.width * 0.32);
+    ctx.save(); ctx.globalAlpha = alpha;
+    ctx.font = `${Math.max(12, Math.round(canvas.width * 0.012))}px system-ui, sans-serif`;
+    const text = bubblesFourthJumpBubble.text;
+    const textW = ctx.measureText(text).width;
+    const padding = 8;
+    const bW = Math.min(maxW, Math.max(60, Math.round(textW))) + padding * 2;
+    const lineHeight = Math.ceil(parseInt(ctx.font,10) * 1.05);
+    const bH = lineHeight + padding * 2;
+    let bX = x;
+    if (bX + bW > canvas.width - 8) bX = canvas.width - bW - 8;
+    let bY = Math.max(8, whale1.y - whale1.size - bH - 8);
+
+    const radius = 8;
+    ctx.fillStyle = 'rgba(255,255,255,0.98)';
+    ctx.strokeStyle = 'rgba(0,0,0,0.28)'; ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(bX + radius, bY);
+    ctx.arcTo(bX + bW, bY, bX + bW, bY + bH, radius);
+    ctx.arcTo(bX + bW, bY + bH, bX, bY + bH, radius);
+    ctx.arcTo(bX, bY + bH, bX, bY, radius);
+    ctx.arcTo(bX, bY, bX + bW, bY, radius);
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+
+    ctx.fillStyle = '#000'; ctx.textBaseline = 'top';
+    ctx.fillText(text, bX + padding, bY + padding);
+    ctx.restore();
+}
+
+// draw Splash's third-jump delayed bubble (activates after scheduledAt) anchored to whale2
+function drawSplashThirdJumpBubble() {
+    const now = Date.now();
+    // if scheduled and time reached, activate
+    if (!splashThirdJumpBubble.shown && splashThirdJumpBubble.scheduledAt && now >= splashThirdJumpBubble.scheduledAt) {
+        splashThirdJumpBubble.shown = true;
+        splashThirdJumpBubble.active = true;
+        splashThirdJumpBubble.startTime = now;
+        // play sound + flourish when it actually appears
+        try { playBubbleSound(); bubbleFlourishes.push({ x: whale2.x, y: whale2.y - (whale2.size || 40), t: Date.now() }); } catch (e) {}
+    }
+    if (!splashThirdJumpBubble.active) return;
+    const elapsed = now - splashThirdJumpBubble.startTime;
+    if (elapsed > splashThirdJumpBubble.duration) { splashThirdJumpBubble.active = false; return; }
+    const fadeIn = 120, fadeOut = 160;
+    let alpha = 1;
+    if (elapsed < fadeIn) alpha = elapsed / fadeIn;
+    else if (elapsed > splashThirdJumpBubble.duration - fadeOut) alpha = Math.max(0, (splashThirdJumpBubble.duration - elapsed) / fadeOut);
+
+    const x = whale2.x + Math.min(whale2.size * 0.6, 32);
+    const maxW = Math.min(220, canvas.width * 0.32);
+    ctx.save(); ctx.globalAlpha = alpha;
+    ctx.font = `${Math.max(12, Math.round(canvas.width * 0.012))}px system-ui, sans-serif`;
+    const text = splashThirdJumpBubble.text;
+    const textW = ctx.measureText(text).width;
+    const padding = 8;
+    const bW = Math.min(maxW, Math.max(60, Math.round(textW))) + padding * 2;
+    const lineHeight = Math.ceil(parseInt(ctx.font,10) * 1.05);
+    const bH = lineHeight + padding * 2;
+    let bX = x;
+    if (bX + bW > canvas.width - 8) bX = canvas.width - bW - 8;
+    let bY = Math.max(8, whale2.y - whale2.size - bH - 8);
+
+    const radius = 8;
+    ctx.fillStyle = 'rgba(255,255,255,0.98)';
+    ctx.strokeStyle = 'rgba(0,0,0,0.28)'; ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(bX + radius, bY);
+    ctx.arcTo(bX + bW, bY, bX + bW, bY + bH, radius);
+    ctx.arcTo(bX + bW, bY + bH, bX, bY + bH, radius);
+    ctx.arcTo(bX, bY + bH, bX, bY, radius);
+    ctx.arcTo(bX, bY, bX + bW, bY, radius);
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+
+    ctx.fillStyle = '#000'; ctx.textBaseline = 'top';
+    ctx.fillText(text, bX + padding, bY + padding);
+    ctx.restore();
+}
+
+// draw Splash bubble that appears after both whales do 5 jumps (scheduled)
+function drawSplashAfterBothFiveBubble() {
+    const now = Date.now();
+    if (!splashAfterBothFiveBubble.shown && splashAfterBothFiveBubble.scheduledAt && now >= splashAfterBothFiveBubble.scheduledAt) {
+        splashAfterBothFiveBubble.shown = true;
+        splashAfterBothFiveBubble.active = true;
+        splashAfterBothFiveBubble.startTime = now;
+        try { playBubbleSound(); bubbleFlourishes.push({ x: whale2.x, y: whale2.y - (whale2.size || 40), t: Date.now() }); } catch (e) {}
+    }
+    if (!splashAfterBothFiveBubble.active) return;
+    const elapsed = now - splashAfterBothFiveBubble.startTime;
+    if (elapsed > splashAfterBothFiveBubble.duration) { splashAfterBothFiveBubble.active = false; return; }
+    const fadeIn = 300, fadeOut = 400;
+    let alpha = 1;
+    if (elapsed < fadeIn) alpha = elapsed / fadeIn;
+    else if (elapsed > splashAfterBothFiveBubble.duration - fadeOut) alpha = Math.max(0, (splashAfterBothFiveBubble.duration - elapsed) / fadeOut);
+
+    const x = whale2.x + Math.min(whale2.size * 0.6, 32);
+    ctx.save(); ctx.globalAlpha = alpha;
+    ctx.font = `${Math.max(14, Math.round(canvas.width * 0.013))}px system-ui, sans-serif`;
+    const text = splashAfterBothFiveBubble.text;
+    const textW = ctx.measureText(text).width;
+    const padding = 10;
+    // Prefer a width that fits the text plus padding, but don't exceed the canvas width
+    const availableW = Math.max(120, canvas.width - 16);
+    const desiredW = Math.round(textW) + padding * 2 + 20; // extra breathing room
+    const bW = Math.min(availableW, Math.max(desiredW, 100));
+    const lineHeight = Math.ceil(parseInt(ctx.font,10) * 1.2);
+    const bH = lineHeight + padding * 2;
+    let bX = x;
+    if (bX + bW > canvas.width - 8) bX = canvas.width - bW - 8;
+    let bY = Math.max(8, whale2.y - whale2.size - bH - 8);
+
+    const radius = 10;
+    ctx.fillStyle = 'rgba(255,255,255,0.98)';
+    ctx.strokeStyle = 'rgba(0,0,0,0.28)'; ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    ctx.moveTo(bX + radius, bY);
+    ctx.arcTo(bX + bW, bY, bX + bW, bY + bH, radius);
+    ctx.arcTo(bX + bW, bY + bH, bX, bY + bH, radius);
+    ctx.arcTo(bX, bY + bH, bX, bY, radius);
+    ctx.arcTo(bX, bY, bX + bW, bY, radius);
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+
+    ctx.fillStyle = '#000'; ctx.textBaseline = 'top';
+    ctx.fillText(text, bX + padding, bY + padding);
+    ctx.restore();
+}
+
+// draw short-lived flourishes when bubbles appear
+function drawBubbleFlourishes() {
+    if (!bubbleFlourishes || bubbleFlourishes.length === 0) return;
+    const now = Date.now();
+    // lifespan in ms
+    const life = 420;
+    for (let i = bubbleFlourishes.length - 1; i >= 0; i--) {
+        const f = bubbleFlourishes[i];
+        const t = now - f.t;
+        if (t > life) { bubbleFlourishes.splice(i, 1); continue; }
+        const p = t / life;
+        const alpha = 1 - p;
+        const radius = 6 + (1 - p) * 18;
+        ctx.save();
+        ctx.globalAlpha = alpha * 0.9;
+        const grad = ctx.createRadialGradient(f.x, f.y, 0, f.x, f.y, radius);
+        grad.addColorStop(0, 'rgba(255,255,255,0.9)');
+        grad.addColorStop(0.4, 'rgba(150,220,255,0.6)');
+        grad.addColorStop(1, 'rgba(150,220,255,0)');
+        ctx.fillStyle = grad;
+        ctx.beginPath(); ctx.arc(f.x, f.y, radius, 0, Math.PI * 2); ctx.fill();
+        ctx.restore();
+    }
+}
+
 // compatibility wrapper: previously the bubble drawer was renamed to dialogue2
 // Some call sites may still expect `dialogue2` — forward to the real function.
 function dialogue2() {
@@ -784,11 +1240,83 @@ function loop(){
         kikiBubble.shown = true; kikiBubble.active = true; kikiBubble.startTime = now;
     }
 
+    // Splash reaction bubble in Sydney: when Bubbles (whale1) has done 1 jump,
+    // show Splash's line once (anchored to whale2)
+    try {
+        if (scenario === 1 && !splashSydneyBubble.triggered && whale1.jumpsDone >= 1) {
+            splashSydneyBubble.triggered = true;
+            splashSydneyBubble.shown = true;
+            splashSydneyBubble.active = true;
+            splashSydneyBubble.startTime = now;
+            // small audio/visual feedback consistent with other bubbles
+            try { playBubbleSound(); bubbleFlourishes.push({ x: whale2.x, y: whale2.y - (whale2.size || 40), t: Date.now() }); } catch (e) {}
+        }
+    } catch (e) {}
+
+    // Splash's own jump bubble: when Splash (whale2) completes 1 jump, show 'Woohoo!' for 2s
+    try {
+        if (!splashJumpBubble.triggered && whale2.jumpsDone >= 1) {
+            splashJumpBubble.triggered = true;
+            splashJumpBubble.shown = true; splashJumpBubble.active = true; splashJumpBubble.startTime = now;
+            try { playBubbleSound(); bubbleFlourishes.push({ x: whale2.x, y: whale2.y - (whale2.size || 40), t: Date.now() }); } catch (e) {}
+        }
+    } catch (e) {}
+
+    // Bubbles' second-jump bubble: when Bubbles (whale1) completes 2 jumps, show 'Big and brave!' for 2s
+    try {
+        if (!bubblesSecondJumpBubble.triggered && whale1.jumpsDone >= 2) {
+            bubblesSecondJumpBubble.triggered = true;
+            bubblesSecondJumpBubble.shown = true; bubblesSecondJumpBubble.active = true; bubblesSecondJumpBubble.startTime = now;
+            try { playBubbleSound(); bubbleFlourishes.push({ x: whale1.x, y: whale1.y - (whale1.size || 40), t: Date.now() }); } catch (e) {}
+        }
+    } catch (e) {}
+
+    // Bubbles' fourth-jump bubble: when Bubbles (whale1) completes 4 jumps, show ' One more!!!' for 2s
+    try {
+        if (!bubblesFourthJumpBubble.triggered && whale1.jumpsDone >= 4) {
+            bubblesFourthJumpBubble.triggered = true;
+            bubblesFourthJumpBubble.shown = true; bubblesFourthJumpBubble.active = true; bubblesFourthJumpBubble.startTime = now;
+            try { playBubbleSound(); bubbleFlourishes.push({ x: whale1.x, y: whale1.y - (whale1.size || 40), t: Date.now() }); } catch (e) {}
+        }
+    } catch (e) {}
+
+    // Splash after both whales have done 5 jumps: schedule Splash bubble to appear 1s later and last 5s
+    try {
+        if (!splashAfterBothFiveBubble.triggered && whale1.jumpsDone >= 5 && whale2.jumpsDone >= 5) {
+            splashAfterBothFiveBubble.triggered = true;
+            splashAfterBothFiveBubble.scheduledAt = now + 1000; // show after 1 second
+        }
+    } catch (e) {}
+
+    // Splash's third-jump bubble: schedule "Again!!!!" to appear 2s after Splash (whale2) does 3 jumps
+    try {
+        if (!splashThirdJumpBubble.triggered && whale2.jumpsDone >= 3) {
+            splashThirdJumpBubble.triggered = true;
+            splashThirdJumpBubble.scheduledAt = now + 2000; // ms
+        }
+    } catch (e) {}
+
     drawEntities();
     // Draw canvas speech bubbles after entities so they overlay whales
     drawSpeechBubbles();
-        // draw Bubbles/Kiki bubble after other bubbles so it overlays appropriately
-        dialogue2();
+    // draw Bubbles/Kiki bubble after other bubbles so it overlays appropriately
+    dialogue2();
+    // draw Sydney-specific bubble (Bubbles) if active
+    try { drawSydneyBubble(); } catch (e) { /* ignore if not available */ }
+    // draw Splash's reaction bubble in Sydney if active
+    try { drawSplashSydneyBubble(); } catch (e) {}
+    // draw Splash's short jump bubble if active
+    try { drawSplashJumpBubble(); } catch (e) {}
+    // draw Bubbles' second-jump bubble if active
+    try { drawBubblesSecondJumpBubble(); } catch (e) {}
+    // draw Splash's third-jump delayed bubble if scheduled/active
+    try { drawSplashThirdJumpBubble(); } catch (e) {}
+    // draw Bubbles' fourth-jump bubble if active
+    try { drawBubblesFourthJumpBubble(); } catch (e) {}
+    // draw Splash's bubble after both whales reach 5 jumps (if scheduled/active)
+    try { drawSplashAfterBothFiveBubble(); } catch (e) {}
+    // small visual flourishes for bubble pops
+    try { drawBubbleFlourishes(); } catch (e) {}
     updateHUD(whale1, whale2, baby);
 
     if (missionReady) {
