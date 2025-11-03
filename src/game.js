@@ -37,6 +37,7 @@ let kikiBubble = {
 };
 
 let scenarioStartTime = Date.now();
+let loveParticles = [];
 // corals image (front layer for warmer waters)
 const coralsImg = new Image();
 let coralsImgLoaded = false;
@@ -365,7 +366,7 @@ function drawEntities() {
     // whales
     whale1.draw();
     whale2.draw();
-    if (baby) { ctx.save(); ctx.globalAlpha = Math.min(1, baby.life * 1.3); baby.draw(); ctx.restore(); }
+    if (baby) { ctx.save(); ctx.globalAlpha = baby.opacity; baby.draw(); drawLoveParticles(); ctx.restore(); }
 
     // draw names beneath each whale (if present)
     (function drawNames() {
@@ -518,10 +519,108 @@ function spawnBaby(mother) {
     b.mother = mother;
     b.vx = mother.vx; b.vy = mother.vy;
     b.life = 0.01;
+    b.opacity = 0;
     // Name the calf
     b.name = 'Sandy';
     baby = b;
+        
+        const centerX = (whale1.x + whale2.x) / 2;
+        const centerY = (whale1.y + whale2.y) / 2;
+        
+        // spawn de 18 corações - EXPLOSÃO EM TODAS AS DIREÇÕES
+        for (let i = 0; i < 18; i++) {
+            
+            const angle = (Math.PI * 4 * i) / 18; // ângulo proporcional (baseado na quantia de coraçoes) da explosão
+            
+            // velocidade da explosão - AJUSTE AQUI para controlar velocidade (mas se liga pq vai mudar o angulo tb)
+            const speed = 0.5 + Math.random() * 0.8;
+            
+            const size = 20 + Math.random() * 15; // tamanho dos corações
+            
+            loveParticles.push({
+                x: centerX,
+                y: centerY,
+                vx: Math.cos(angle) * speed * 2,
+                vy: Math.sin(angle) * speed * 2,
+                life: 1.3,
+                size: size,
+                rotation: Math.random() * Math.PI * 2,
+                rotationSpeed: (Math.random() - 0.5) * 0.01,  // rotação mais lenta
+                color: ['#dd3da8ff', '#fc68b9ff', '#cc59bdff', '#ff00eaff', '#ce67d1ff'][Math.floor(Math.random() * 5)],
+                initialSpeed: speed
+            });
+        }
+    }
+
+// Função para atualizar as partículas (chame no loop principal)
+function updateLoveParticles() {
+    for (let i = loveParticles.length - 1; i >= 0; i--) {
+        const p = loveParticles[i];
+        
+        // Física suave
+        p.vy -= 0.01; // Flutuam para cima
+        p.vx *= 0.98; // Resistência do ar
+        p.vy *= 0.98;
+        
+        p.x += p.vx;
+        p.y += p.vy;
+        p.rotation += p.rotationSpeed;
+        
+        // Fade out lento
+        p.life -= 0.004;
+        
+        // Remover partículas mortas
+        if (p.life <= 0) {
+            loveParticles.splice(i, 1);
+        }
+    }
 }
+
+// Função para desenhar os corações (chame após desenhar as baleias)
+function drawLoveParticles() {
+    for (const p of loveParticles) {
+        ctx.save();
+        ctx.globalAlpha = p.life;
+        ctx.translate(p.x, p.y);
+        ctx.rotate(p.rotation);
+        
+        drawHeart(p.size, p.color);
+        
+        ctx.restore();
+    }
+}
+
+// Função para desenhar um coração
+function drawHeart(size, color) {
+    const s = size / 20;
+    
+    // Coração preenchido
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(0, s * 5);
+    
+    // Lado esquerdo
+    ctx.bezierCurveTo(-s * 10, s * -2, -s * 15, s * 5, -s * 8, s * 12);
+    ctx.bezierCurveTo(-s * 5, s * 15, 0, s * 18, 0, s * 5);
+    
+    // Lado direito
+    ctx.bezierCurveTo(0, s * 18, s * 5, s * 15, s * 8, s * 12);
+    ctx.bezierCurveTo(s * 15, s * 5, s * 10, s * -2, 0, s * 5);
+    ctx.closePath();
+    ctx.fill();
+    
+    // Borda branca suave
+    ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    
+    // Brilho interno
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    ctx.beginPath();
+    ctx.arc(-s * 3, s * 2, s * 3, 0, Math.PI * 2);
+    ctx.fill();
+}
+
 
 // draw Kiki (Bubbles) speech bubble anchored to whale1 (top-level so loop can call it)
 function drawKikiBubble() {
@@ -599,6 +698,10 @@ function dialogue2() {
 function updateBaby() {
     if (!baby || !baby.mother) return;
     const m = baby.mother;
+
+    if (baby.opacity < 1) {
+        baby.opacity += 0.007; // FADE IN DO BEBÊ AQUI LINDA (quanto menor, mais devagar)
+    }
     const offsetBehind = -m.vx * 6;
     const side = (m.vx < 0 ? -1 : 1);
     const targetX = m.x + offsetBehind - side * (m.size * 0.4);
@@ -666,6 +769,7 @@ function loop(){
         const d = Math.hypot(whale1.x-whale2.x, whale1.y-whale2.y);
         if (d < Math.min(whale1.size, whale2.size) * 0.8) spawnBaby(whale1);
     }
+    updateLoveParticles();
     if (baby) updateBaby();
 
     // Kiki bubble triggers: when either whale first reaches 3 krill eaten,
