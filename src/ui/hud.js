@@ -23,21 +23,25 @@ export function updateHUD(whale1, whale2, baby) {
     const counter = document.getElementById('counter');
     if (!counter) return;
 
+  // Hide the entire HUD in the warmer-waters (final) scenario
+  if (scenario === 2) {
+    try { counter.style.display = 'none'; } catch (e) {}
+    return;
+  } else {
+    // Ensure HUD is visible again for other scenarios
+    try { counter.style.display = ''; } catch (e) {}
+  }
+
     const w1name = safeName(whale1, 'Whale 1');
     const w2name = safeName(whale2, 'Whale 2');
     const w1color = safeColor(whale1, '#0a4770');
     const w2color = safeColor(whale2, '#0b4c78');
 
-    if (scenario === 0) {
+  if (scenario === 0) {
         counter.innerHTML = chipHtml(w1name, w1color, `${whale1.krillEaten} / 10 krill`) +
                              chipHtml(w2name, w2color, `${whale2.krillEaten} / 10 krill`);
     } else if (scenario === 1) {
         counter.innerHTML = chipHtml(w1name, w1color, `${whale1.jumpsDone} / 5 jumps`) +
                              chipHtml(w2name, w2color, `${whale2.jumpsDone} / 5 jumps`);
-    } else {
-        const distance = Math.round(Math.hypot(whale1.x - whale2.x, whale1.y - whale2.y));
-        const babyStatus = baby ? `${safeName(baby, 'Calf')} — born` : 'No calf yet';
-        counter.innerHTML = chipHtml(w1name, w1color, `Distance: ${distance}px`) +
-                             chipHtml(w2name, w2color, babyStatus);
-    }
+  }
 }

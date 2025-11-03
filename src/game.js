@@ -67,6 +67,19 @@ let skyBanner = {
     finishTime: 0
 };
 
+// Second sky banner to appear shortly after the first one hides
+let skyBanner2 = {
+    text: "The pod is complete! Let's have a gentle swim before saying goodbye?",
+    shown: false,
+    active: false,
+    startTime: 0,
+    scheduledAt: 0,
+    typingSpeed: 45,
+    displayDuration: 5000,
+    finished: false,
+    finishTime: 0
+};
+
 // Splash (whale2) reaction bubble in Sydney triggered after Bubbles (whale1) does 1 jump
 let splashSydneyBubble = {
     text: 'That was a mighty breach!',
@@ -90,6 +103,27 @@ let splashBabyBubble = {
 
 let bubblesBabyBubble = {
     text: 'Stay by my side, little one.',
+    shown: false,
+    active: false,
+    startTime: 0,
+    scheduledAt: 0,
+    duration: 4000,
+    triggered: false
+};
+
+// Final thank-you bubbles shown after the second sky banner finishes
+let finalBubblesBubble = {
+    text: 'Thank you for helping our family.',
+    shown: false,
+    active: false,
+    startTime: 0,
+    scheduledAt: 0,
+    duration: 4000,
+    triggered: false
+};
+
+let finalSplashBubble = {
+    text: 'You guided us well. Farewell, friend!',
     shown: false,
     active: false,
     startTime: 0,
@@ -242,6 +276,9 @@ function initScenario(s) {
     splashThirdJumpBubble.shown = false; splashThirdJumpBubble.active = false; splashThirdJumpBubble.startTime = 0; splashThirdJumpBubble.scheduledAt = 0; splashThirdJumpBubble.triggered = false;
     bubblesFourthJumpBubble.shown = false; bubblesFourthJumpBubble.active = false; bubblesFourthJumpBubble.startTime = 0; bubblesFourthJumpBubble.triggered = false;
     splashAfterBothFiveBubble.shown = false; splashAfterBothFiveBubble.active = false; splashAfterBothFiveBubble.startTime = 0; splashAfterBothFiveBubble.scheduledAt = 0; splashAfterBothFiveBubble.triggered = false;
+    // reset sky banners
+    if (typeof skyBanner !== 'undefined') { skyBanner.shown = false; skyBanner.active = false; skyBanner.startTime = 0; skyBanner.finished = false; skyBanner.finishTime = 0; }
+    if (typeof skyBanner2 !== 'undefined') { skyBanner2.shown = false; skyBanner2.active = false; skyBanner2.startTime = 0; skyBanner2.scheduledAt = 0; skyBanner2.finished = false; skyBanner2.finishTime = 0; }
     // reset baby-announcement bubbles
     splashBabyBubble.shown = false; splashBabyBubble.active = false; splashBabyBubble.startTime = 0; splashBabyBubble.scheduledAt = 0; splashBabyBubble.triggered = false;
     bubblesBabyBubble.shown = false; bubblesBabyBubble.active = false; bubblesBabyBubble.startTime = 0; bubblesBabyBubble.scheduledAt = 0; bubblesBabyBubble.triggered = false;
@@ -315,7 +352,7 @@ function createAntarcticaModal() {
     });
 
     // (no close button — modal must be dismissed with the "x" key)
-
+    // message element for the modal
     const msg = document.createElement('div');
     msg.id = 'antarctica-modal-text';
     // emphasize the action phrases so they stand out in the intro modal
@@ -1428,6 +1465,94 @@ function drawBubblesBabyBubble() {
     ctx.restore();
 }
 
+// draw final Bubbles thank-you bubble: scheduled after second sky banner
+function drawFinalBubblesBubble() {
+    const now = Date.now();
+    if (!finalBubblesBubble.shown && finalBubblesBubble.scheduledAt && now >= finalBubblesBubble.scheduledAt) {
+        finalBubblesBubble.shown = true;
+        finalBubblesBubble.active = true;
+        finalBubblesBubble.startTime = now;
+        try { playBubbleSound(); bubbleFlourishes.push({ x: whale1.x, y: whale1.y - (whale1.size || 40), t: Date.now() }); } catch (e) {}
+    }
+    if (!finalBubblesBubble.active) return;
+    const elapsed = now - finalBubblesBubble.startTime;
+    if (elapsed > finalBubblesBubble.duration) { finalBubblesBubble.active = false; return; }
+    const fadeIn = 120, fadeOut = 160;
+    let alpha = 1;
+    if (elapsed < fadeIn) alpha = elapsed / fadeIn;
+    else if (elapsed > finalBubblesBubble.duration - fadeOut) alpha = Math.max(0, (finalBubblesBubble.duration - elapsed) / fadeOut);
+    const x = whale1.x + Math.min(whale1.size * 0.6, 32);
+    const maxW = Math.min(260, canvas.width * 0.36);
+    ctx.save(); ctx.globalAlpha = alpha;
+    ctx.font = `${Math.max(12, Math.round(canvas.width * 0.012))}px system-ui, sans-serif`;
+    const text = finalBubblesBubble.text;
+    const textW = ctx.measureText(text).width;
+    const padding = 8;
+    const bW = Math.min(maxW, Math.max(80, Math.round(textW))) + padding * 2;
+    const lineHeight = Math.ceil(parseInt(ctx.font,10) * 1.05);
+    const bH = lineHeight + padding * 2;
+    let bX = x;
+    if (bX + bW > canvas.width - 8) bX = canvas.width - bW - 8;
+    let bY = Math.max(8, whale1.y - whale1.size - bH - 8);
+    const radius = 8;
+    ctx.fillStyle = 'rgba(255,255,255,0.98)';
+    ctx.strokeStyle = 'rgba(0,0,0,0.28)'; ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(bX + radius, bY);
+    ctx.arcTo(bX + bW, bY, bX + bW, bY + bH, radius);
+    ctx.arcTo(bX + bW, bY + bH, bX, bY + bH, radius);
+    ctx.arcTo(bX, bY + bH, bX, bY, radius);
+    ctx.arcTo(bX, bY, bX + bW, bY, radius);
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#000'; ctx.textBaseline = 'top';
+    ctx.fillText(text, bX + padding, bY + padding);
+    ctx.restore();
+}
+
+// draw final Splash farewell bubble: scheduled after second sky banner (+2s)
+function drawFinalSplashBubble() {
+    const now = Date.now();
+    if (!finalSplashBubble.shown && finalSplashBubble.scheduledAt && now >= finalSplashBubble.scheduledAt) {
+        finalSplashBubble.shown = true;
+        finalSplashBubble.active = true;
+        finalSplashBubble.startTime = now;
+        try { playBubbleSound(); bubbleFlourishes.push({ x: whale2.x, y: whale2.y - (whale2.size || 40), t: Date.now() }); } catch (e) {}
+    }
+    if (!finalSplashBubble.active) return;
+    const elapsed = now - finalSplashBubble.startTime;
+    if (elapsed > finalSplashBubble.duration) { finalSplashBubble.active = false; return; }
+    const fadeIn = 120, fadeOut = 160;
+    let alpha = 1;
+    if (elapsed < fadeIn) alpha = elapsed / fadeIn;
+    else if (elapsed > finalSplashBubble.duration - fadeOut) alpha = Math.max(0, (finalSplashBubble.duration - elapsed) / fadeOut);
+    const x = whale2.x + Math.min(whale2.size * 0.6, 32);
+    const maxW = Math.min(260, canvas.width * 0.36);
+    ctx.save(); ctx.globalAlpha = alpha;
+    ctx.font = `${Math.max(12, Math.round(canvas.width * 0.012))}px system-ui, sans-serif`;
+    const text = finalSplashBubble.text;
+    const textW = ctx.measureText(text).width;
+    const padding = 8;
+    const bW = Math.min(maxW, Math.max(80, Math.round(textW))) + padding * 2;
+    const lineHeight = Math.ceil(parseInt(ctx.font,10) * 1.05);
+    const bH = lineHeight + padding * 2;
+    let bX = x;
+    if (bX + bW > canvas.width - 8) bX = canvas.width - bW - 8;
+    let bY = Math.max(8, whale2.y - whale2.size - bH - 8);
+    const radius = 8;
+    ctx.fillStyle = 'rgba(255,255,255,0.98)';
+    ctx.strokeStyle = 'rgba(0,0,0,0.28)'; ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(bX + radius, bY);
+    ctx.arcTo(bX + bW, bY, bX + bW, bY + bH, radius);
+    ctx.arcTo(bX + bW, bY + bH, bX, bY + bH, radius);
+    ctx.arcTo(bX, bY + bH, bX, bY, radius);
+    ctx.arcTo(bX, bY, bX + bW, bY, radius);
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#000'; ctx.textBaseline = 'top';
+    ctx.fillText(text, bX + padding, bY + padding);
+    ctx.restore();
+}
+
 // draw short-lived flourishes when bubbles appear
 function drawBubbleFlourishes() {
     if (!bubbleFlourishes || bubbleFlourishes.length === 0) return;
@@ -1489,6 +1614,71 @@ function drawSkyBanner() {
             if (now - skyBanner.finishTime > skyBanner.displayDuration) {
                 skyBanner.active = false;
                 skyBanner.shown = false;
+                // schedule the second sky banner to appear 1s after the first finishes
+                try {
+                    if (skyBanner2 && !skyBanner2.scheduledAt) {
+                        skyBanner2.scheduledAt = now + 1000;
+                        skyBanner2.shown = false; skyBanner2.active = false; skyBanner2.finished = false; skyBanner2.finishTime = 0;
+                    }
+                } catch (e) {}
+            }
+        }
+    }
+    ctx.restore();
+}
+
+// draw the second sky banner (typewriter) when scheduled
+function drawSkyBanner2() {
+    if (!skyBanner2) return;
+    const now = Date.now();
+    // if scheduled and time reached, activate
+    if (!skyBanner2.shown && skyBanner2.scheduledAt && now >= skyBanner2.scheduledAt) {
+        skyBanner2.shown = true;
+        skyBanner2.active = true;
+        skyBanner2.startTime = now;
+        skyBanner2.finished = false;
+        skyBanner2.finishTime = 0;
+    }
+    if (!skyBanner2.active || !skyBanner2.shown) return;
+    const elapsed = now - skyBanner2.startTime;
+    const total = skyBanner2.text.length;
+    const chars = Math.min(total, Math.floor(elapsed / Math.max(1, skyBanner2.typingSpeed)));
+    let toShow = skyBanner2.text.slice(0, chars);
+    const fontSize = Math.max(16, Math.round(canvas.width * 0.02));
+    ctx.save();
+    ctx.font = `${fontSize}px system-ui, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const y = Math.max(28, seaLevel * 0.35) + 20;
+    const x = canvas.width / 2;
+    if (chars < total) {
+        const blink = Math.floor(now / 400) % 2 === 0 ? '|' : ' ';
+        toShow = toShow + blink;
+    }
+    ctx.fillStyle = '#053e63';
+    ctx.fillText(toShow, x, y);
+
+    // if finished typing, schedule hide after displayDuration
+    if (chars >= total) {
+        if (!skyBanner2.finished) {
+            skyBanner2.finished = true;
+            skyBanner2.finishTime = now;
+        } else {
+            if (now - skyBanner2.finishTime > skyBanner2.displayDuration) {
+                // schedule final thank-you bubbles once the second banner finishes
+                try {
+                    if (finalBubblesBubble && !finalBubblesBubble.scheduledAt) {
+                        finalBubblesBubble.scheduledAt = now; // immediately after banner gone
+                        finalBubblesBubble.shown = false; finalBubblesBubble.active = false; finalBubblesBubble.triggered = false; finalBubblesBubble.startTime = 0;
+                    }
+                    if (finalSplashBubble && !finalSplashBubble.scheduledAt) {
+                        finalSplashBubble.scheduledAt = now + 2000; // 2s after banner gone
+                        finalSplashBubble.shown = false; finalSplashBubble.active = false; finalSplashBubble.triggered = false; finalSplashBubble.startTime = 0;
+                    }
+                } catch (e) {}
+                skyBanner2.active = false;
+                skyBanner2.shown = false;
+                skyBanner2.scheduledAt = 0;
             }
         }
     }
@@ -1559,8 +1749,9 @@ function loop(){
     if (!__loopStarted) { __loopStarted = true; try { console.debug && console.debug('game loop started'); } catch (e) {} }
 
     drawBackground();
-    // sky banner (typewriter) — appears after calf birth
+    // sky banners (typewriter) — first appears after calf birth, second is scheduled after the first
     try { drawSkyBanner(); } catch (e) {}
+    try { drawSkyBanner2(); } catch (e) {}
 
     missionReady = isMissionComplete();
 
@@ -1660,6 +1851,9 @@ function loop(){
     // draw baby-welcome bubbles if scheduled/active
     try { drawSplashBabyBubble(); } catch (e) {}
     try { drawBubblesBabyBubble(); } catch (e) {}
+    // draw final thank-you bubbles if scheduled/active
+    try { drawFinalBubblesBubble(); } catch (e) {}
+    try { drawFinalSplashBubble(); } catch (e) {}
     // draw Splash's reaction bubble in Sydney if active
     try { drawSplashSydneyBubble(); } catch (e) {}
     // draw Splash's short jump bubble if active
